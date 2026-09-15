@@ -26,6 +26,7 @@ export interface Department {
 export interface Staff {
   id: string;
   name: string;
+  profileImage?: string;
   designation: string;
   role: Role;
   departmentId: string;
@@ -79,6 +80,18 @@ export interface Student {
   projectTitle: string;
   projectGuide: string;
   projectProgress: number;
+  projectSubject?: string;
+  projectHod?: string;
+  projectType?: 'Individual' | 'Group';
+  projectDescription?: string;
+  projectAcademicYear?: string;
+  projectStartDate?: string;
+  projectDeadline?: string;
+  projectStatus?: 'Completed' | 'In Progress' | 'Pending' | 'Overdue';
+  projectMarks?: number;
+  projectGrade?: string;
+  projectRemarks?: string;
+  projectMembers?: string[];
   grievances: { id: string; title: string; status: string; date: string; assignedTo: string }[];
   discipline: { id: string; incident: string; date: string; action: string; status: string }[];
 }
@@ -143,6 +156,7 @@ export interface ApprovalRequest {
   hodStatus?: 'pending' | 'recommended' | 'rejected';
   hodRemarks?: string;
   shortlistedCandidateIds?: string[];
+  shortlistedCandidateNotes?: Record<string, string>;
   details: Record<string, string>;
   documents: ApprovalDoc[];
   timetableEntries?: TimetableEntry[];
@@ -336,6 +350,43 @@ export interface NonTeachingTask {
   date: string;
 }
 
+/* ========== ADDITIONAL ASSIGNED WORK (HOD-assigned faculty tasks) ========== */
+/**
+ * Additional work assigned by the HOD to a faculty member. Every task carries
+ * an allocated number of hours and a date — those hours automatically contribute
+ * to the faculty member's daily Workload Hours on `date` (see HOD Workload page).
+ */
+export type WorkCategory =
+  | 'examination'
+  | 'documentation'
+  | 'accreditation'
+  | 'coordination'
+  | 'event'
+  | 'result-analysis'
+  | 'committee'
+  | 'student-activities'
+  | 'other';
+
+export type AssignedTaskPriority = 'low' | 'medium' | 'high';
+export type AssignedTaskStatus = 'pending' | 'in-progress' | 'completed' | 'on-hold';
+
+export interface AssignedTask {
+  id: string;
+  facultyId: string;           /* staffId of the assigned faculty */
+  departmentId: string;
+  title: string;
+  description: string;
+  date: string;                /* workload date (YYYY-MM-DD); hours count on this day */
+  allocatedHours: number;
+  priority: AssignedTaskPriority;
+  deadline: string;            /* YYYY-MM-DD */
+  category: WorkCategory;
+  status: AssignedTaskStatus;
+  assignedBy: string;          /* staffId of the HOD */
+  assignedDate: string;        /* YYYY-MM-DD */
+  remarks?: string;
+}
+
 /* ========== RESOURCE MANAGEMENT ========== */
 export type ResourceCategory =
   | 'classroom'
@@ -455,6 +506,67 @@ export interface AllocationHistory {
   reason?: string;
 }
 
+/* ========== MENTORING (central mentor–mentee allocation layer) ========== */
+/**
+ * One mentor–mentee relationship = Student + Mentor + class context.
+ * Created/managed by the HOD in Faculty Management → Mentoring Management;
+ * the SAME records drive the faculty-side "My Mentees" views, so the faculty
+ * dashboards always stay in sync with HOD allocations (single source of truth).
+ */
+export type MentorAllocationAction = 'allocated' | 'auto-allocated' | 'reassigned' | 'deactivated';
+
+export interface MentorAllocation {
+  id: string;
+  studentId: string;
+  mentorId: string;                 /* staffId of the mentor */
+  previousMentorId: string | null;  /* set when the mentee was reassigned */
+  departmentId: string;
+  semester: number;
+  section: string;                  /* section letter, e.g. 'A' */
+  academicYear: string;             /* system-controlled active year, e.g. '2026–27' */
+  allocatedBy: string;              /* staffId of the HOD who performed the action */
+  date: string;                     /* allocation date (ISO yyyy-mm-dd) */
+  status: 'active' | 'inactive';
+}
+
+/* ========== INSTITUTION WORKLOAD CONFIGURATION ========== */
+/**
+ * Institution-configurable workload thresholds & mentoring rule used by the
+ * HOD Workload page. Configurable so the institution decides how mentoring
+ * hours are derived from the number of assigned mentees and what counts as
+ * low / moderate / high / overloaded workload for a single day.
+ */
+export interface WorkloadThresholds {
+  low: number;       /* hours ≤ low  → Low workload  */
+  moderate: number;  /* low < hours ≤ moderate → Moderate workload */
+  high: number;      /* moderate < hours ≤ high → High workload; hours > high → Overloaded */
+}
+
+export interface MentoringWorkloadRule {
+  enabled: boolean;
+  scheduleDay: string;      /* weekday the mentoring workload is counted on, e.g. 'Monday' */
+  studentsPerBatch: number; /* number of mentees that make up one mentoring batch */
+  hoursPerBatch: number;    /* workload hours credited per mentoring batch */
+}
+
+export interface WorkloadSettings {
+  dailyCapacity: number;                    /* ideal workload hours per faculty per day */
+  thresholds: WorkloadThresholds;
+  mentoringRule: MentoringWorkloadRule;
+}
+
+export interface MentoringHistory {
+  id: string;
+  allocationId: string;
+  studentId: string;
+  date: string;
+  action: MentorAllocationAction;
+  previousMentorId: string | null;
+  newMentorId: string;
+  performedBy: string;              /* staffId */
+  note: string;
+}
+
 export interface AppData {
   departments: Department[];
   staff: Staff[];
@@ -485,4 +597,8 @@ export interface AppData {
   resourceHistory: ResourceHistory[];
   subjectAllocations: SubjectAllocation[];
   allocationHistory: AllocationHistory[];
+  mentorAllocations: MentorAllocation[];
+  mentoringHistory: MentoringHistory[];
+  assignedTasks: AssignedTask[];
+  workloadSettings: WorkloadSettings;
 }

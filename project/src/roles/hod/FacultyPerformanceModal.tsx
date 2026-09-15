@@ -2,13 +2,16 @@ import { Modal } from '../../components/Modal';
 import { StatusBadge } from '../../components/DataTable';
 import { useStore, deptName, roleLabels } from '../../store/StoreContext';
 import type { Staff } from '../../data/types';
-import type { ReactNode } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { facultyTeachingEffectiveness, teTrend, TE_COMPARISON_LABEL } from './teachingEffectiveness';
+import type { TeSubjectResult } from './teachingEffectiveness';
 
 /* Faculty Performance Details — performance-review modal for the HOD Faculty Management → Faculty
-   Performance view. Opens on double-click of a faculty row. Focused on teaching performance, student
-   outcomes, mentoring and professional contributions. Personal/HR details (gender, DOB, blood group,
-   address) intentionally excluded — they belong to the staff profile modal. */
+   Performance view. Opens on double-click of a faculty row. Focused on teaching performance
+   (Teaching Effectiveness — an academic-data-driven indicator), student outcomes, mentoring and
+   professional contributions. Personal/HR details (gender, DOB, blood group, address) intentionally
+   excluded — they belong to the staff profile modal. */
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -38,13 +41,13 @@ function syllabusStatus(pct: number) {
   return pct >= 85 ? SYLLABUS_ON_TRACK : pct >= 70 ? SYLLABUS_AT_RISK : SYLLABUS_DELAYED;
 }
 
-/* Overall performance status — composite of attendance (15), student feedback (25), overall
-   rating (20), syllabus completion (20) and student outcomes (20). Missing components are
-   excluded with weights renormalised; each pending item deducts 5 points. */
+/* Overall performance status — composite of attendance (15), overall rating (20), syllabus
+   completion (20) and student outcomes (20). Missing components are excluded with weights
+   renormalised; each pending item deducts 5 points. Student feedback is intentionally NOT
+   part of this composite — Teaching Effectiveness carries the academic dimension. */
 function overallPerformance(staff: Staff, avgSyllabus: number, passPct: number, hasStudentData: boolean, hasSubjects: boolean) {
   const parts: { w: number; v: number | null }[] = [
     { w: 15, v: staff.attendancePct / 100 },
-    { w: 25, v: staff.feedbackScore ? staff.feedbackScore / 5 : null },
     { w: 20, v: staff.performanceRating ? staff.performanceRating / 5 : null },
     { w: 20, v: hasSubjects ? avgSyllabus / 100 : null },
     { w: 20, v: hasStudentData ? passPct / 100 : null },
@@ -82,6 +85,76 @@ function TrendSparkline({ values, labels }: { values: number[]; labels: string[]
   );
 }
 
+/* Subject-specific Teaching Effectiveness detail — opened from a class/subject card.
+   Shows the overall subject score plus the academic indicators contributing to it. */
+function SubjectTEDetail({ result, onBack }: { result: TeSubjectResult; onBack: () => void }) {
+  const trend = teTrend(result.change);
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-xs font-medium text-blue-600 inline-flex items-center gap-1 hover:text-blue-700 transition-colors"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" /> Back to Teaching Effectiveness
+      </button>
+
+      <div className="card p-4">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900">{result.subjectName}</p>
+            <p className="text-xs text-slate-500">
+              {result.classHeading}
+              {result.classSections ? ` · ${result.classSections}` : ''} · {result.subjectCode}
+            </p>
+          </div>
+          <span className={`badge ${result.status.badge} shrink-0`}>{result.status.label}</span>
+        </div>
+        <div className="mt-3 flex items-baseline gap-2 flex-wrap">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Teaching Effectiveness</p>
+          <p className="text-2xl font-bold text-slate-900">{result.current}%</p>
+          <span className={`text-xs font-semibold ${trend.cls}`}>{trend.arrow} {Math.abs(result.change)}% {TE_COMPARISON_LABEL}</span>
+        </div>
+        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
+          <div className={`h-full rounded-full ${result.status.bar}`} style={{ width: `${result.current}%` }} />
+        </div>
+        <p className="text-xs text-slate-400 mt-1.5">
+          Previous semester: {result.previous}% · {result.studentCount} student{result.studentCount === 1 ? '' : 's'} tracked
+        </p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Academic Indicators</p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {result.indicators.map((ind) => {
+            const it = teTrend(ind.change);
+            return (
+              <div key={ind.key} className="card p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-slate-600">{ind.label}</p>
+                  <span className={`badge ${ind.status.badge} shrink-0`}>{ind.status.label}</span>
+                </div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <p className="text-lg font-bold text-slate-900">{ind.current}%</p>
+                  <span className={`text-xs font-medium ${it.cls}`}>{it.arrow} {Math.abs(ind.change)}%</span>
+                </div>
+                <p className="text-xs text-slate-400">Previous: {ind.previous}%</p>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
+                  <div className={`h-full rounded-full ${ind.status.bar}`} style={{ width: `${ind.current}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-400 border border-slate-100 rounded-lg px-3 py-2 bg-slate-50">
+        Teaching Effectiveness is an academic performance indicator generated from available student assessment and outcome data.
+      </p>
+    </div>
+  );
+}
+
 export function FacultyPerformanceModal({ staff, open, onClose, onNavigate }: {
   staff: Staff | null;
   open: boolean;
@@ -89,6 +162,8 @@ export function FacultyPerformanceModal({ staff, open, onClose, onNavigate }: {
   onNavigate?: (menuId: string) => void;
 }) {
   const { data } = useStore();
+  const [teOpenSubjectId, setTeOpenSubjectId] = useState<string | null>(null);
+  useEffect(() => { setTeOpenSubjectId(null); }, [staff?.id]);
   if (!staff) return null;
 
   const dept = data.departments.find((d) => d.id === staff.departmentId);
@@ -113,15 +188,10 @@ export function FacultyPerformanceModal({ staff, open, onClose, onNavigate }: {
   const menteeGpa = mentees.length ? (mentees.reduce((a, m) => a + m.gpa, 0) / mentees.length).toFixed(1) : '—';
   const mentoringFollowUps = mentees.filter((st) => st.attendancePct < 75 || st.backlogs > 0).length;
 
-  /* Feedback breakdown — deterministic criteria scores around the overall feedback score */
-  const seed = [...staff.id].reduce((a, c) => a + c.charCodeAt(0), 0);
-  const deltas = [-0.2, 0.1, -0.1, 0.2, 0];
-  const feedbackCriteria = ['Teaching Effectiveness', 'Subject Clarity', 'Doubt Resolution', 'Communication', 'Student Engagement'];
-  const breakdown = feedbackCriteria.map((label, i) => ({
-    label,
-    value: staff.feedbackScore ? Math.round(Math.min(5, Math.max(1, staff.feedbackScore + deltas[(seed + i) % 5])) * 10) / 10 : 0,
-  }));
-  const responses = taughtStudents.reduce((a, st) => a + st.subjects.filter((s) => subjectNames.has(s)).length, 0);
+  /* Teaching Effectiveness — academic analytics generated from student academic
+     outcome data (replaces the previous student-feedback breakdown) */
+  const te = facultyTeachingEffectiveness(data, staff);
+  const teOpenSubject = te?.subjects.find((s) => s.subjectId === teOpenSubjectId) ?? null;
 
   /* Professional contributions */
   const pubs = data.publications.filter((p) => p.facultyId === staff.id);
@@ -163,7 +233,7 @@ export function FacultyPerformanceModal({ staff, open, onClose, onNavigate }: {
             <p className="text-sm text-slate-500">{staff.designation} · {dept?.name}</p>
             <div className="mt-1.5 flex items-center gap-2 flex-wrap">
               <StatusBadge status={staff.status} />
-              <span className={`badge ${overall.badge}`} title="Composite of attendance, student feedback, rating, syllabus completion, student outcomes and pending work">
+              <span className={`badge ${overall.badge}`} title="Composite of attendance, overall rating, syllabus completion, student outcomes and pending work">
                 Overall: {overall.label}
               </span>
             </div>
@@ -191,7 +261,12 @@ export function FacultyPerformanceModal({ staff, open, onClose, onNavigate }: {
           <h4 className="text-sm font-semibold text-slate-900 mb-2">Performance Overview</h4>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MetricCard label="Attendance" value={`${staff.attendancePct}%`} tone={staff.attendancePct >= 90 ? 'emerald' : staff.attendancePct >= 80 ? 'amber' : 'rose'} />
-            <MetricCard label="Student Feedback" value={staff.feedbackScore ? `${staff.feedbackScore} / 5` : '—'} />
+            <MetricCard
+              label="Teaching Effectiveness"
+              value={te ? `${te.current}%` : '—'}
+              tone={te ? (te.status.key === 'good' ? 'emerald' : te.status.key === 'average' ? 'amber' : 'rose') : undefined}
+              sub={te ? `${teTrend(te.change).arrow} ${Math.abs(te.change)}% ${TE_COMPARISON_LABEL}` : 'no academic data'}
+            />
             <MetricCard label="Overall Rating" value={staff.performanceRating ? `${staff.performanceRating} / 5` : '—'} />
             <MetricCard label="Pending Work" value={staff.pendingWork} tone={staff.pendingWork > 0 ? 'amber' : 'emerald'} />
           </div>
@@ -266,29 +341,74 @@ export function FacultyPerformanceModal({ staff, open, onClose, onNavigate }: {
           )}
         </div>
 
-        {/* 7. Student feedback */}
+        {/* 7. Teaching Effectiveness — academic analytics (replaces student feedback) */}
         <div>
-          <h4 className="text-sm font-semibold text-slate-900 mb-2">Student Feedback</h4>
-          <div className="card p-4">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <div className="flex items-baseline gap-2">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Overall Feedback</p>
-                <p className="text-lg font-bold text-slate-900">{staff.feedbackScore ? `${staff.feedbackScore} / 5` : '—'}</p>
-              </div>
-              {responses > 0 && <p className="text-xs text-slate-400">Based on {responses} student response{responses === 1 ? '' : 's'}</p>}
+          <h4 className="text-sm font-semibold text-slate-900 mb-2">Teaching Effectiveness</h4>
+          {!te ? (
+            <div className="card p-4 text-sm text-slate-500">
+              No academic outcome data is available for this faculty's assigned subjects yet.
             </div>
-            <div className="space-y-2.5">
-              {breakdown.map((b) => (
-                <div key={b.label} className="flex items-center gap-3">
-                  <p className="text-xs text-slate-600 w-44 shrink-0">{b.label}</p>
-                  <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-600 rounded-full" style={{ width: `${(b.value / 5) * 100}%` }} />
+          ) : teOpenSubject ? (
+            <SubjectTEDetail result={teOpenSubject} onBack={() => setTeOpenSubjectId(null)} />
+          ) : (
+            <div className="space-y-3">
+              {/* Overall teaching effectiveness */}
+              <div className="card p-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Overall Teaching Effectiveness</p>
+                    <p className="text-2xl font-bold text-slate-900">{te.current}%</p>
                   </div>
-                  <span className="text-xs font-semibold text-slate-900 w-9 text-right">{b.value ? b.value.toFixed(1) : '—'}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${teTrend(te.change).cls}`}>
+                      {teTrend(te.change).arrow} {Math.abs(te.change)}% {TE_COMPARISON_LABEL}
+                    </span>
+                    <span className={`badge ${te.status.badge}`}>{te.status.label}</span>
+                  </div>
                 </div>
-              ))}
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-3">
+                  <div className={`h-full rounded-full ${te.status.bar}`} style={{ width: `${te.current}%` }} />
+                </div>
+                <p className="text-xs text-slate-400 mt-2">Previous semester: {te.previous}%</p>
+              </div>
+
+              {/* Data principle note */}
+              <p className="text-xs text-slate-400 border border-slate-100 rounded-lg px-3 py-2 bg-slate-50">
+                Teaching Effectiveness is an academic performance indicator generated from available student assessment and outcome data.
+              </p>
+
+              {/* Class / subject-wise teaching effectiveness */}
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider pt-1">Teaching Effectiveness by Class &amp; Subject</p>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {te.subjects.map((sub) => {
+                  const st = teTrend(sub.change);
+                  return (
+                    <button
+                      key={sub.subjectId}
+                      type="button"
+                      onClick={() => setTeOpenSubjectId(sub.subjectId)}
+                      className="card p-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider truncate">{sub.classHeading}</p>
+                          <p className="text-sm font-medium text-slate-900 truncate">{sub.subjectName}</p>
+                        </div>
+                        <span className={`badge ${sub.status.badge} shrink-0`}>{sub.status.label}</span>
+                      </div>
+                      <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                        <p className="text-xl font-bold text-slate-900">{sub.current}%</p>
+                        <span className={`text-xs font-medium ${st.cls}`}>{st.arrow} {Math.abs(sub.change)}% {TE_COMPARISON_LABEL}</span>
+                      </div>
+                      <span className="text-xs font-medium text-blue-600 inline-flex items-center gap-1 mt-2">
+                        View Details <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* 8. Research & professional contributions */}

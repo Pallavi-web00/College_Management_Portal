@@ -54,6 +54,15 @@ body {
   .table-row {
     @apply transition-colors hover:bg-slate-50 cursor-pointer;
   }
+  .hod-chart-tooltip {
+    @apply pointer-events-none absolute z-20 w-56 rounded-md border border-slate-200 bg-white px-3 py-2 text-left shadow-lg;
+    opacity: 0;
+    transition: opacity 100ms ease-out;
+  }
+  .group\/bar:hover > .hod-chart-tooltip,
+  .group\/bar:focus-within > .hod-chart-tooltip {
+    opacity: 1;
+  }
 }
 
 /* scrollbar */

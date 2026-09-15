@@ -226,7 +226,7 @@ function AcademicCalendar({ onBack }: { onBack?: () => void }) {
     { id: 'e5', date: '2026-10-02', event: 'Gandhi Jayanti', type: 'Holiday', dept: 'all', semester: 'all', description: 'National holiday. College remains closed.' },
     { id: 'e6', date: '2026-10-15', event: 'Mid-Semester Break', type: 'Holiday', dept: 'all', semester: 'all', description: 'Mid-semester break for all students and faculty.' },
     { id: 'e7', date: '2026-11-01', event: 'Internal Assessment - II', type: 'Exam', dept: 'all', semester: 'all', description: 'Second internal assessment examinations.' },
-    { id: 'e8', date: '2026-11-15', event: 'Tech Fest - Innovate 2026', type: 'Event', dept: 'd1', semester: 'all', description: 'Annual technical festival organized by CSE department.' },
+    { id: 'e8', date: '2026-11-15', event: 'Tech Fest - Innovate 2026', type: 'Event', dept: 'd1', semester: 'all', description: 'Annual technical festival organized by BCA department.' },
     { id: 'e9', date: '2026-12-01', event: 'Project Review - Phase I', type: 'Academic', dept: 'all', semester: '6', description: 'First phase project review for final-year students.' },
     { id: 'e10', date: '2026-12-15', event: 'Semester End Examinations', type: 'Exam', dept: 'all', semester: 'all', description: 'End-semester examinations commence.' },
     { id: 'e11', date: '2027-01-05', event: 'Semester Break', type: 'Holiday', dept: 'all', semester: 'all', description: 'Winter semester break begins.' },

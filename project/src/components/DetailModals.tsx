@@ -268,7 +268,8 @@ export function StudentDetailModal({ student, open, onClose, editable, onSave }:
           <div className="card p-4">
             <h4 className="text-sm font-semibold text-slate-900 mb-2">Project</h4>
             <p className="text-sm text-slate-700">{student.projectTitle}</p>
-            <p className="text-xs text-slate-500 mt-1">Guide: {student.projectGuide}</p>
+            <p className="text-xs text-slate-500 mt-1">{student.projectType ?? 'Project'} · {student.projectSubject ?? '—'} · Guide: {student.projectGuide}</p>
+            <p className="text-xs text-slate-500 mt-1">Status: {student.projectStatus ?? 'In Progress'} · Due: {student.projectDeadline ?? '—'} · Marks: {student.projectMarks ?? '—'} ({student.projectGrade ?? '—'})</p>
             <div className="mt-2">
               <div className="flex justify-between text-xs text-slate-500 mb-1"><span>Progress</span><span>{student.projectProgress}%</span></div>
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">

@@ -1,315 +1,505 @@
-import type { AppData } from './types';
+import type { AppData, Department, Staff, Student, Subject, Resource, Lab, TimetableEntry, ExamSchedule, SubjectAllocation, MentorAllocation, Candidate, ApprovalRequest } from './types';
+
+const ACADEMIC_YEAR = '2026–27';
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+const SLOT_DETAILS = [
+  { number: 1, start: '09:00', end: '10:00' },
+  { number: 2, start: '10:00', end: '11:00' },
+  { number: 3, start: '11:00', end: '12:00' },
+  { number: 4, start: '13:00', end: '14:00' },
+  { number: 5, start: '14:00', end: '15:00' },
+  { number: 6, start: '15:00', end: '16:00' },
+] as const;
+
+const departments: Department[] = [
+  { id: 'd1', name: 'Bachelor of Computer Applications', code: 'BCA', hodId: 's3', email: 'hod.bca@college.edu', contact: '9876543210', facultyCount: 4, studentCount: 13, labCount: 2, classroomCount: 3 },
+  { id: 'd2', name: 'Bachelor of Commerce', code: 'B.Com.', hodId: 's7', email: 'hod.bcom@college.edu', contact: '9876543220', facultyCount: 4, studentCount: 6, labCount: 1, classroomCount: 2 },
+  { id: 'd3', name: 'Bachelor of Science', code: 'B.Sc.', hodId: 's11', email: 'hod.bsc@college.edu', contact: '9876543230', facultyCount: 4, studentCount: 6, labCount: 2, classroomCount: 2 },
+  { id: 'd4', name: 'Bachelor of Arts', code: 'B.A.', hodId: 's15', email: 'hod.ba@college.edu', contact: '9876543240', facultyCount: 4, studentCount: 6, labCount: 1, classroomCount: 2 },
+];
+
+const facultySeed: Array<[string, string, string, string, string[]]> = [
+  ['s3', 'Priyanka', 'Professor & HOD', 'd1', ['Programming in C', 'Python Programming', 'Database Management Systems', 'Data Structures', 'Major Project']],
+  ['s4', 'Rahul', 'Associate Professor', 'd1', ['Digital Fundamentals', 'Java Programming', 'Web Development', 'Computer Architecture', 'Mobile Application Development']],
+  ['s5', 'Nandini', 'Assistant Professor', 'd1', ['Web Technologies', 'Computer Networks', 'Software Engineering', 'Cloud Computing', 'Artificial Intelligence Fundamentals']],
+  ['s6', 'Karthik', 'Lecturer / Instructor', 'd1', ['Mathematics', 'Statistics', 'Project Management', 'Cyber Security', 'Seminar']],
+  ['s7', 'Shwetha', 'Professor & HOD', 'd2', ['Financial Accounting', 'Corporate Accounting', 'Cost Accounting', 'Management Accounting', 'Project Work']],
+  ['s8', 'Meghana', 'Associate Professor', 'd2', ['Business Economics', 'Business Law', 'Financial Management', 'Strategic Management', 'Corporate Finance']],
+  ['s9', 'Rohan', 'Assistant Professor', 'd2', ['Marketing Management', 'Business Statistics', 'Investment Management', 'GST', 'Business Analytics']],
+  ['s10', 'Deepa', 'Lecturer / Instructor', 'd2', ['Business Communication', 'Entrepreneurship', 'Business Research', 'Auditing', 'Viva/Seminar']],
+  ['s11', 'Varshini', 'Professor & HOD', 'd3', ['Mathematics', 'Physics', 'Chemistry', 'Statistics', 'Project Work']],
+  ['s12', 'Anil', 'Associate Professor', 'd3', ['Differential Equations', 'Real Analysis', 'Numerical Methods', 'Quantum Physics', 'Mathematical Modelling']],
+  ['s13', 'Kavya', 'Assistant Professor', 'd3', ['Organic Chemistry', 'Physical Chemistry', 'Electronics', 'Advanced Chemistry', 'Applied Physics']],
+  ['s14', 'Sandeep', 'Lecturer / Instructor', 'd3', ['Computer Science', 'Data Analysis', 'Computer Applications', 'Research Methodology', 'Seminar']],
+  ['s15', 'Sharanya', 'Professor & HOD', 'd4', ['English Literature', 'Kannada Literature', 'History', 'Political Science', 'Dissertation']],
+  ['s16', 'Harish', 'Associate Professor', 'd4', ['Economics', 'Sociology', 'Indian Economy', 'Public Policy', 'Contemporary Society']],
+  ['s17', 'Aishwarya', 'Assistant Professor', 'd4', ['Psychology', 'Indian Constitution', 'Social Psychology', 'Human Rights', 'Literature Seminar']],
+  ['s18', 'Naveen', 'Lecturer / Instructor', 'd4', ['English Communication', 'Public Administration', 'Research Methodology', 'World History', 'Viva/Seminar']],
+];
+
+const staff: Staff[] = [
+  { id: 's1', name: 'Bhavesh Suvarna', designation: 'Principal', role: 'principal', departmentId: 'd1', email: 'principal@college.edu', phone: '9876500001', subjects: [], classes: [], status: 'active', attendancePct: 98, feedbackScore: 4.9, performanceRating: 5, pendingWork: 0, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2015-06-01', qualifications: 'Ph.D', publications: 24, researchProjects: 4, address: 'College Campus', gender: 'Male', dob: '1970-03-15', bloodGroup: 'B+' },
+  { id: 's2', name: 'Varshitha', designation: 'Dean', role: 'dean', departmentId: 'd1', email: 'dean@college.edu', phone: '9876500002', subjects: [], classes: [], status: 'active', attendancePct: 97, feedbackScore: 4.8, performanceRating: 5, pendingWork: 1, weeklyHours: 38, employmentType: 'full-time', joinedOn: '2016-07-15', qualifications: 'Ph.D', publications: 18, researchProjects: 3, address: 'Faculty Quarters', gender: 'Female', dob: '1974-11-22', bloodGroup: 'O+' },
+  ...(facultySeed.map(([id, name, designation, departmentId, subjects], i) => ({
+    id,
+    name,
+    designation,
+    role: designation.includes('HOD') ? 'hod' : designation === 'Professor' ? 'professor' : designation.startsWith('Associate') ? 'associate-professor' : designation.startsWith('Assistant') ? 'assistant-professor' : 'lecturer',
+    departmentId,
+    email: `${name.toLowerCase()}@college.edu`,
+    phone: `98765000${String(i + 3).padStart(2, '0')}`,
+    subjects,
+    classes: [`${departmentId.toUpperCase()}-A`],
+    status: 'active' as const,
+    attendancePct: 91 + (i % 8),
+    feedbackScore: Number((4.2 + (i % 7) / 10).toFixed(1)),
+    performanceRating: 4,
+    pendingWork: i % 3,
+    weeklyHours: 32 + (i % 4) * 2,
+    employmentType: 'full-time' as const,
+    joinedOn: `20${10 + (i % 12)}-07-01`,
+    qualifications: designation.includes('HOD') ? 'Ph.D' : 'M.Com / M.Sc / M.A.',
+    publications: 3 + (i % 8),
+    researchProjects: i % 3,
+    address: 'Faculty Quarters, Campus',
+    gender: i % 2 ? 'Female' : 'Male',
+    dob: `198${i % 9}-0${(i % 8) + 1}-15`,
+    bloodGroup: i % 2 ? 'O+' : 'A+',
+  })) as Staff[]),
+];
+
+const studentNames: Record<string, string[]> = {
+  d1: ['Adila', 'Ajay Raj', 'Hasreena', 'Pallavi', 'Chethan S', 'Chethan A.J.', 'Ananya H', 'Bharathi', 'Kiran', 'Pavan', 'Snigdha', 'Shamitha', 'Shaheed'],
+  d2: ['Shaziya', 'Shiyal', 'Shradha', 'Vaishnavi', 'Ziyan', 'Afreen'],
+  d3: ['Shreyas', 'Fiona', 'Thejaksha', 'Rakshith', 'Pranav', 'Maya'],
+  d4: ['Arun', 'Likith', 'Nikitha', 'Deekshith', 'Sunil', 'Kavana'],
+};
+
+const subjectCatalog: Record<string, Record<number, string[]>> = {
+  d1: {
+    1: ['Programming in C', 'Mathematics', 'Digital Fundamentals', 'Communication Skills', 'Computer Fundamentals'],
+    2: ['Python Programming', 'Data Structures', 'Discrete Mathematics', 'Web Technologies', 'Communication Skills'],
+    3: ['Database Management Systems', 'Computer Networks', 'Java Programming', 'Operating Systems', 'Statistics'],
+    4: ['Software Engineering', 'Advanced Java', 'Web Development', 'Computer Architecture', 'Mathematics'],
+    5: ['Python Application Development', 'Data Analytics', 'Cloud Computing', 'Project Management', 'Elective'],
+    6: ['Major Project', 'Artificial Intelligence Fundamentals', 'Cyber Security', 'Mobile Application Development', 'Seminar'],
+  },
+  d2: {
+    1: ['Financial Accounting', 'Business Economics', 'Business Communication', 'Business Mathematics', 'Business Environment'],
+    2: ['Corporate Accounting', 'Business Law', 'Marketing Management', 'Business Statistics', 'Environmental Studies'],
+    3: ['Cost Accounting', 'Income Tax', 'Banking Theory', 'Human Resource Management', 'Entrepreneurship'],
+    4: ['Advanced Accounting', 'Financial Management', 'Auditing', 'E-Commerce', 'Business Research'],
+    5: ['Management Accounting', 'Investment Management', 'GST', 'Entrepreneurship Development', 'Elective'],
+    6: ['Project Work', 'Strategic Management', 'Corporate Finance', 'Business Analytics', 'Viva/Seminar'],
+  },
+  d3: {
+    1: ['Mathematics', 'Physics', 'Chemistry', 'Computer Science', 'Communication Skills'],
+    2: ['Differential Equations', 'Mechanics', 'Organic Chemistry', 'Programming', 'Statistics'],
+    3: ['Mathematical Methods', 'Electricity and Magnetism', 'Physical Chemistry', 'Data Analysis', 'Statistics'],
+    4: ['Real Analysis', 'Quantum Physics', 'Inorganic Chemistry', 'Computer Applications', 'Research Methodology'],
+    5: ['Numerical Methods', 'Electronics', 'Analytical Chemistry', 'Advanced Statistics', 'Elective'],
+    6: ['Project Work', 'Mathematical Modelling', 'Applied Physics', 'Advanced Chemistry', 'Seminar'],
+  },
+  d4: {
+    1: ['English Literature', 'Kannada Literature', 'History', 'Political Science', 'Economics'],
+    2: ['Sociology', 'Psychology', 'Indian Constitution', 'English Communication', 'Economics'],
+    3: ['Indian History', 'Political Theory', 'Social Psychology', 'Public Administration', 'Kannada Literature'],
+    4: ['Modern Literature', 'Indian Economy', 'Sociology of Education', 'Human Rights', 'Research Methodology'],
+    5: ['World History', 'Indian Political System', 'Development Economics', 'Social Research', 'Elective'],
+    6: ['Dissertation', 'Public Policy', 'Contemporary Society', 'Literature Seminar', 'Viva/Seminar'],
+  },
+};
+
+const departmentFaculty: Record<string, string[]> = {
+  d1: ['s3', 's4', 's5', 's6'],
+  d2: ['s7', 's8', 's9', 's10'],
+  d3: ['s11', 's12', 's13', 's14'],
+  d4: ['s15', 's16', 's17', 's18'],
+};
+
+const roomList = ['Room 101', 'Room 102', 'Room 103', 'Room 104', 'Room 105', 'Room 106', 'Room 107', 'Room 108'];
+const labList = ['Computer Lab 1', 'Computer Lab 2', 'Physics Lab', 'Chemistry Lab', 'Statistics Lab'];
+
+const rooms = roomList.map((name, index) => ({
+  id: `room-${index + 1}`,
+  name,
+  departmentId: index < 3 ? 'd1' : index < 6 ? 'd2' : index < 8 ? 'd3' : 'd4',
+  capacity: 60,
+}));
+
+const resources: Resource[] = [
+  ...rooms.map((room) => ({
+    id: `res-${room.name.toLowerCase().replace(/\s+/g, '-')}`,
+    name: room.name,
+    category: 'classroom' as const,
+    departmentId: room.departmentId,
+    location: `Block ${room.name.replace(/\D/g, '')[0] ?? 'A'}`,
+    status: 'available' as const,
+    isLab: false,
+    capacity: 60,
+  })),
+  ...labList.map((lab, index) => ({
+    id: `lab-res-${index + 1}`,
+    name: lab,
+    category: 'computer' as const,
+    departmentId: index < 2 ? 'd1' : index === 2 ? 'd3' : index === 3 ? 'd3' : 'd3',
+    location: index < 2 ? 'Computer Block' : 'Science Block',
+    status: 'available' as const,
+    isLab: true,
+    capacity: 40,
+  })),
+];
+
+const labs: Lab[] = [
+  { id: 'lab-1', name: 'Computer Lab 1', departmentId: 'd1', capacity: 40, inChargeId: 's4', subjects: ['Programming in C', 'Python Programming', 'Database Management Systems', 'Web Development'], systems: 30, equipment: [{ name: 'Projector', qty: 1, status: 'available' }, { name: 'Desktop', qty: 30, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-2', name: 'Computer Lab 2', departmentId: 'd1', capacity: 40, inChargeId: 's5', subjects: ['Python Programming', 'Java Programming', 'Cloud Computing', 'Mobile Application Development'], systems: 30, equipment: [{ name: 'Projector', qty: 1, status: 'available' }, { name: 'Desktop', qty: 30, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-3', name: 'Physics Lab', departmentId: 'd3', capacity: 35, inChargeId: 's12', subjects: ['Physics', 'Mechanics', 'Electricity and Magnetism', 'Applied Physics'], systems: 18, equipment: [{ name: 'Oscilloscope', qty: 4, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-4', name: 'Chemistry Lab', departmentId: 'd3', capacity: 35, inChargeId: 's13', subjects: ['Chemistry', 'Organic Chemistry', 'Physical Chemistry', 'Advanced Chemistry'], systems: 16, equipment: [{ name: 'Fume Hood', qty: 3, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-5', name: 'Statistics Lab', departmentId: 'd3', capacity: 30, inChargeId: 's14', subjects: ['Statistics', 'Data Analysis', 'Advanced Statistics'], systems: 12, equipment: [{ name: 'Workstation', qty: 12, status: 'available' }], maintenanceStatus: 'good' },
+];
+
+const students: Student[] = Object.entries(studentNames).flatMap(([departmentId, names]) =>
+  names.map((name, index) => {
+    const department = departments.find((d) => d.id === departmentId)!;
+    const score = index % 6 === 0 ? 87 : index % 5 === 0 ? 81 : index % 4 === 0 ? 76 : index % 3 === 0 ? 68 : 74;
+    const semester = (index % 6) + 1;
+    const section = index % 2 === 0 ? 'A' : 'B';
+    const rollNo = `${department.code.replace('.', '')}2026${String(index + 1).padStart(3, '0')}`;
+
+    return {
+      id: `st${departmentId}${index + 1}`,
+      name,
+      rollNo,
+      program: department.name,
+      semester,
+      section,
+      departmentId,
+      email: `${name.toLowerCase().replace(/[^a-z]/g, '.')}@student.edu`,
+      phone: `998877${String(6600 + index).slice(-4)}`,
+      gender: index % 2 ? 'Female' : 'Male',
+      dob: `200${index % 6}-0${(index % 8) + 1}-12`,
+      bloodGroup: index % 2 ? 'O+' : 'B+',
+      address: 'Bengaluru',
+      parentName: `Parent of ${name}`,
+      parentPhone: '9988770000',
+      parentEmail: 'parent@student.edu',
+      admissionDate: '2024-08-01',
+      admissionType: index % 3 === 0 ? 'Merit' : 'Management',
+      status: 'active',
+      attendancePct: 74 + (index % 18),
+      gpa: Number((score / 10).toFixed(1)),
+      cgpa: Number(((score / 10) - 0.2).toFixed(1)),
+      backlogs: score < 70 ? 1 : 0,
+      internalMarks: [],
+      subjects: subjectCatalog[departmentId][semester] ?? [],
+      projectTitle: `${department.code} Capstone Project`,
+      projectGuide: department.hodId,
+      projectProgress: 60 + (index % 30),
+      projectSubject: 'Project Work',
+      projectHod: department.hodId,
+      projectType: 'Group',
+      projectDescription: 'Semester project aligned with the academic timetable and learning outcomes.',
+      projectAcademicYear: ACADEMIC_YEAR,
+      projectStartDate: '2026-07-15',
+      projectDeadline: '2026-11-30',
+      projectStatus: index % 3 === 0 ? 'In Progress' : 'Pending',
+      projectMarks: 70 + (index % 20),
+      projectGrade: 'A',
+      projectRemarks: 'On schedule',
+      projectMembers: [name],
+      grievances: [],
+      discipline: [],
+    };
+  })
+);
+
+const subjects: Subject[] = [];
+const subjectAllocations: SubjectAllocation[] = [];
+const subjectLookup = new Map<string, Subject>();
+const roomResourceMap: Record<string, string> = {
+  'Room 101': 'res-room-101',
+  'Room 102': 'res-room-102',
+  'Room 103': 'res-room-103',
+  'Room 104': 'res-room-104',
+  'Room 105': 'res-room-105',
+  'Room 106': 'res-room-106',
+  'Room 107': 'res-room-107',
+  'Room 108': 'res-room-108',
+  'Computer Lab 1': 'lab-res-1',
+  'Computer Lab 2': 'lab-res-2',
+  'Physics Lab': 'lab-res-3',
+  'Chemistry Lab': 'lab-res-4',
+  'Statistics Lab': 'lab-res-5',
+};
+
+for (const department of departments) {
+  const facultyIds = departmentFaculty[department.id] ?? [department.hodId];
+
+  for (let semester = 1; semester <= 6; semester += 1) {
+    const deptSubjects = subjectCatalog[department.id][semester] ?? [];
+
+    deptSubjects.forEach((subjectName, index) => {
+      const code = `${department.code.replace(/[^A-Z]/g, '')}${semester}${String(index + 1).padStart(2, '0')}`;
+      const facultyId = facultyIds[(semester + index) % facultyIds.length] ?? department.hodId;
+      const isPractical = ['Programming in C', 'Python Programming', 'Data Structures', 'Database Management Systems', 'Java Programming', 'Web Development', 'Python Application Development', 'Major Project', 'Mobile Application Development', 'Business Statistics', 'E-Commerce', 'Business Analytics', 'Project Work', 'GST', 'Management Accounting', 'Programming', 'Data Analysis', 'Computer Applications', 'Electronics', 'Project Work', 'Applied Physics', 'Advanced Chemistry', 'Statistics', 'English Communication', 'Research Methodology', 'Dissertation', 'Literature Seminar'].includes(subjectName);
+      const subject: Subject = {
+        id: `${department.id}-sub-${semester}-${index + 1}`,
+        name: subjectName,
+        code,
+        departmentId: department.id,
+        semester,
+        facultyId,
+        syllabusCompletion: 68 + ((semester + index) % 25),
+        unitsTotal: 5,
+        unitsCompleted: 3 + (index % 3),
+        classes: ['A'],
+        type: isPractical ? 'laboratory' : 'theory',
+        credits: isPractical ? 2 : 4,
+        weeklyHrs: isPractical ? 2 : 4,
+        suggestedResources: isPractical ? ['computer'] : ['classroom'],
+      };
+
+      subjects.push(subject);
+      subjectLookup.set(`${department.id}-${semester}-${subjectName}`, subject);
+
+      const resourceName = isPractical
+        ? department.id === 'd1'
+          ? index % 2 === 0
+            ? 'Computer Lab 1'
+            : 'Computer Lab 2'
+          : department.id === 'd3' && subjectName.includes('Physics')
+            ? 'Physics Lab'
+            : department.id === 'd3' && subjectName.includes('Chem')
+              ? 'Chemistry Lab'
+              : 'Statistics Lab'
+        : roomList[(semester + index) % roomList.length];
+
+      subjectAllocations.push({
+        id: `alloc-${department.id}-${semester}-${index + 1}`,
+        subjectId: subject.id,
+        departmentId: department.id,
+        semester,
+        academicYear: ACADEMIC_YEAR,
+        classIds: ['A'],
+        facultyId,
+        resourceIds: [roomResourceMap[resourceName]],
+        requiredTypes: isPractical ? ['computer'] : ['classroom'],
+        status: 'allocated',
+        weeklyHours: isPractical ? 2 : 4,
+        createdBy: department.hodId,
+        createdAt: '2026-08-01',
+        updatedAt: '2026-08-01',
+      });
+    });
+  }
+}
+
+const facultyUsage = new Map<string, string>();
+const roomUsage = new Map<string, string>();
+
+function resolveFaculty(deptId: string, slotKey: string, fallbackId: string): string {
+  const current = facultyUsage.get(slotKey);
+  if (!current) {
+    facultyUsage.set(slotKey, fallbackId);
+    return fallbackId;
+  }
+  const facultyPool = departmentFaculty[deptId] ?? [fallbackId];
+  for (const candidate of facultyPool) {
+    if (candidate !== current) {
+      facultyUsage.set(slotKey, candidate);
+      return candidate;
+    }
+  }
+  return fallbackId;
+}
+
+function resolveRoom(slotKey: string, isLab: boolean, preferred: string): string {
+  const current = roomUsage.get(slotKey);
+  if (!current) {
+    roomUsage.set(slotKey, preferred);
+    return preferred;
+  }
+  const pool = isLab ? labList : roomList;
+  const next = pool.find((name) => name !== current && name !== preferred) ?? preferred;
+  roomUsage.set(slotKey, next);
+  return next;
+}
+
+const timetable: TimetableEntry[] = [];
+
+const departmentTemplate: Record<string, Array<[string | number, string | number]>> = {
+  d1: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
+  d2: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
+  d3: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
+  d4: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
+};
+
+for (const department of departments) {
+  const facultyIds = departmentFaculty[department.id] ?? [department.hodId];
+
+  for (let semester = 1; semester <= 6; semester += 1) {
+    const classSubjects = subjectCatalog[department.id][semester] ?? [];
+    const subjectNames = classSubjects;
+    const practicalIndex = 0;
+
+    DAYS.forEach((day, dayIndex) => {
+      const periodSubjects = [...subjectNames];
+      if (day === 'Wednesday') {
+        periodSubjects[2] = subjectNames[practicalIndex];
+        periodSubjects[3] = subjectNames[practicalIndex];
+      }
+      if (day === 'Thursday') {
+        periodSubjects[4] = subjectNames[1];
+        periodSubjects[5] = 'Mentoring';
+      }
+      if (day === 'Friday') {
+        periodSubjects[5] = 'Library';
+      }
+      if (day === 'Monday') {
+        periodSubjects[5] = 'Seminar';
+      }
+      if (day === 'Tuesday') {
+        periodSubjects[5] = 'Project';
+      }
+
+      const daySlots = day === 'Saturday' ? SLOT_DETAILS.slice(0, 3) : SLOT_DETAILS;
+
+      daySlots.forEach((slot, slotIndex) => {
+        const rawSubjectName = periodSubjects[slotIndex] ?? subjectNames[(slotIndex + dayIndex) % subjectNames.length];
+        const isLab = ['Programming in C', 'Python Programming', 'Data Structures', 'Database Management Systems', 'Java Programming', 'Web Development', 'Python Application Development', 'Major Project', 'Mobile Application Development', 'Business Statistics', 'E-Commerce', 'Business Analytics', 'Project Work', 'GST', 'Management Accounting', 'Programming', 'Data Analysis', 'Computer Applications', 'Electronics', 'Applied Physics', 'Advanced Chemistry', 'Statistics', 'English Communication', 'Research Methodology', 'Dissertation', 'Literature Seminar'].includes(String(rawSubjectName));
+        const subjectName = typeof rawSubjectName === 'string' ? rawSubjectName : subjectNames[0];
+        const matchedSubject = subjects.find((subject) => subject.departmentId === department.id && subject.semester === semester && subject.name === subjectName) ?? subjects.find((subject) => subject.departmentId === department.id && subject.semester === semester)!
+        const resolvedFaculty = resolveFaculty(department.id, `${day}|${slot.start}`, matchedSubject.facultyId || facultyIds[0]);
+        const preferredRoom = isLab
+          ? department.id === 'd1'
+            ? slotIndex % 2 === 0
+              ? 'Computer Lab 1'
+              : 'Computer Lab 2'
+            : department.id === 'd3' && subjectName.includes('Physics')
+              ? 'Physics Lab'
+              : department.id === 'd3' && subjectName.includes('Chem')
+                ? 'Chemistry Lab'
+                : 'Statistics Lab'
+          : roomList[(dayIndex + slotIndex + semester) % roomList.length];
+        const finalRoom = resolveRoom(`${day}|${slot.start}`, isLab, preferredRoom);
+
+        timetable.push({
+          id: `tt-${department.id}-s${semester}-${day}-${slot.number}`,
+          departmentId: department.id,
+          section: 'A',
+          semester,
+          day,
+          slot: `${slot.start}-${slot.end}`,
+          subject: subjectName,
+          facultyId: resolvedFaculty,
+          room: finalRoom,
+          isLab,
+          published: true,
+          status: 'approved',
+        });
+      });
+    });
+  }
+}
+
+const exams: ExamSchedule[] = subjects.map((subject, index) => ({
+  id: `ex${index + 1}`,
+  departmentId: subject.departmentId,
+  examName: 'End Semester Examination',
+  semester: subject.semester,
+  date: `2026-11-${String((index % 18) + 2).padStart(2, '0')}`,
+  timing: '10:00 AM - 01:00 PM',
+  duration: '3 hours',
+  subject: subject.name,
+  hall: subject.departmentId === 'd1' ? 'Room 101' : subject.departmentId === 'd2' ? 'Room 104' : subject.departmentId === 'd3' ? 'Room 107' : 'Room 105',
+  invigilatorId: subject.facultyId,
+  invigilatorIds: [subject.facultyId],
+  status: 'published',
+  academicYear: ACADEMIC_YEAR,
+  examType: 'End Semester',
+  facultyId: subject.facultyId,
+  marksEntered: students.filter((student) => student.departmentId === subject.departmentId).length,
+  marksSubmitted: true,
+}));
+
+const mentorAllocations: MentorAllocation[] = students.map((student, index) => ({
+  id: `ma${index + 1}`,
+  studentId: student.id,
+  mentorId: departmentFaculty[student.departmentId][index % departmentFaculty[student.departmentId].length],
+  previousMentorId: null,
+  departmentId: student.departmentId,
+  semester: student.semester,
+  section: student.section,
+  academicYear: ACADEMIC_YEAR,
+  allocatedBy: departments.find((d) => d.id === student.departmentId)!.hodId,
+  date: '2026-08-12',
+  status: 'active',
+}));
+
+const candidates: Candidate[] = [
+  { id: 'cand1', name: 'Dr. Ananya Rao', qualification: 'Ph.D. in Computer Science', experience: '6 years', appliedFor: 'Assistant Professor — Computer Applications', departmentId: 'd1', status: 'interviewed', documents: [{ id: 'cand1-doc', name: 'CV and Research Profile', type: 'PDF', size: '1.2 MB' }], interviewScore: 88, interviewNotes: 'Strong teaching record and relevant applied research.' },
+  { id: 'cand2', name: 'Vivek Menon', qualification: 'M.Tech. in Software Engineering', experience: '4 years', appliedFor: 'Assistant Professor — Computer Applications', departmentId: 'd1', status: 'interviewed', documents: [{ id: 'cand2-doc', name: 'Resume', type: 'PDF', size: '860 KB' }], interviewScore: 82, interviewNotes: 'Good industry exposure and practical curriculum experience.' },
+  { id: 'cand3', name: 'Meera Kulkarni', qualification: 'M.Com. and NET', experience: '5 years', appliedFor: 'Assistant Professor — Commerce', departmentId: 'd2', status: 'interviewed', documents: [{ id: 'cand3-doc', name: 'Academic Portfolio', type: 'PDF', size: '980 KB' }], interviewScore: 85, interviewNotes: 'Relevant commerce teaching and assessment experience.' },
+];
+
+const approvals: ApprovalRequest[] = [{
+  id: 'rec1',
+  type: 'recruitment',
+  title: 'Recruitment Request — Assistant Professor',
+  submittedBy: 'Varshitha',
+  submittedByRole: 'dean',
+  departmentId: 'd1',
+  date: '2026-09-05',
+  purpose: 'Fill the vacant Assistant Professor position for Computer Applications.',
+  status: 'pending',
+  deanStatus: 'pending',
+  shortlistedCandidateIds: [],
+  details: {
+    subject: 'Computer Applications',
+    designation: 'Assistant Professor',
+    qualification: 'Ph.D. / M.Tech. in Computer Science',
+    requirements: 'Teaching, curriculum development, and student mentoring.',
+    justification: 'Department workload has increased for the current academic year.',
+  },
+  documents: [],
+}];
 
 export const sampleData: AppData = {
-  departments: [
-    { id: 'd1', name: 'Computer Science & Engineering', code: 'CSE', hodId: 's3', email: 'hod.cse@college.edu', contact: '9876543210', facultyCount: 8, studentCount: 240, labCount: 4, classroomCount: 6 },
-    { id: 'd2', name: 'Electronics & Communication', code: 'ECE', hodId: 's9', email: 'hod.ece@college.edu', contact: '9876543220', facultyCount: 7, studentCount: 210, labCount: 5, classroomCount: 5 },
-    { id: 'd3', name: 'Mechanical Engineering', code: 'MECH', hodId: 's14', email: 'hod.mech@college.edu', contact: '9876543230', facultyCount: 6, studentCount: 180, labCount: 3, classroomCount: 4 },
-    { id: 'd4', name: 'Mathematics & Humanities', code: 'MTH', hodId: 's18', email: 'hod.mth@college.edu', contact: '9876543240', facultyCount: 5, studentCount: 0, labCount: 0, classroomCount: 3 },
-  ],
-  staff: [
-    // Principal
-    { id: 's1', name: 'Dr. Vikram Rathore', designation: 'Principal', role: 'principal', departmentId: 'd1', email: 'principal@college.edu', phone: '9876500001', subjects: [], classes: [], status: 'active', attendancePct: 98, feedbackScore: 4.9, performanceRating: 5, pendingWork: 0, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2015-06-01', qualifications: 'Ph.D (CSE)', publications: 45, researchProjects: 6, address: '12 College Road, Campus', gender: 'Male', dob: '1968-03-15', bloodGroup: 'B+' },
-    // Dean
-    { id: 's2', name: 'Dr. Anjali Mehta', designation: 'Dean Academics', role: 'dean', departmentId: 'd1', email: 'dean@college.edu', phone: '9876500002', subjects: [], classes: [], status: 'active', attendancePct: 97, feedbackScore: 4.8, performanceRating: 5, pendingWork: 1, weeklyHours: 38, employmentType: 'full-time', joinedOn: '2016-07-15', qualifications: 'Ph.D (ECE)', publications: 38, researchProjects: 4, address: '8 Faculty Quarters', gender: 'Female', dob: '1972-11-22', bloodGroup: 'O+' },
-    // CSE HOD + faculty
-    { id: 's3', name: 'Dr. Rajesh Kumar', designation: 'Professor & HOD', role: 'hod', departmentId: 'd1', email: 'hod.cse@college.edu', phone: '9876500003', subjects: ['Advanced Algorithms'], classes: ['CSE-A Sem-6'], status: 'active', attendancePct: 96, feedbackScore: 4.7, performanceRating: 5, pendingWork: 0, weeklyHours: 36, employmentType: 'full-time', joinedOn: '2010-01-10', qualifications: 'Ph.D (CSE)', publications: 32, researchProjects: 3, address: '5 Faculty Quarters', gender: 'Male', dob: '1975-05-18', bloodGroup: 'A+' },
-    { id: 's4', name: 'Dr. Priya Sharma', designation: 'Professor', role: 'professor', departmentId: 'd1', email: 'priya.s@college.edu', phone: '9876500004', subjects: ['Advanced Algorithms', 'Distributed Systems'], classes: ['CSE-A Sem-6', 'CSE-B Sem-6'], status: 'active', attendancePct: 95, feedbackScore: 4.8, performanceRating: 5, pendingWork: 0, weeklyHours: 34, employmentType: 'full-time', joinedOn: '2012-08-01', qualifications: 'Ph.D (CSE)', publications: 28, researchProjects: 2, address: '14 Faculty Quarters', gender: 'Female', dob: '1980-02-10', bloodGroup: 'AB+' },
-    { id: 's5', name: 'Dr. Arjun Nair', designation: 'Associate Professor', role: 'associate-professor', departmentId: 'd1', email: 'arjun.n@college.edu', phone: '9876500005', subjects: ['Database Management Systems', 'Cloud Computing'], classes: ['CSE-A Sem-4', 'CSE-B Sem-4'], status: 'active', attendancePct: 94, feedbackScore: 4.6, performanceRating: 4, pendingWork: 1, weeklyHours: 38, employmentType: 'full-time', joinedOn: '2014-06-15', qualifications: 'Ph.D (CSE)', publications: 18, researchProjects: 1, address: '22 Faculty Quarters', gender: 'Male', dob: '1982-09-30', bloodGroup: 'O-' },
-    { id: 's6', name: 'Prof. Neha Verma', designation: 'Assistant Professor', role: 'assistant-professor', departmentId: 'd1', email: 'neha.v@college.edu', phone: '9876500006', subjects: ['Data Structures', 'Operating Systems'], classes: ['CSE-A Sem-3', 'CSE-B Sem-3'], status: 'active', attendancePct: 93, feedbackScore: 4.5, performanceRating: 4, pendingWork: 2, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2017-07-20', qualifications: 'M.Tech (CSE)', publications: 6, researchProjects: 0, address: '30 Faculty Quarters', gender: 'Female', dob: '1988-04-12', bloodGroup: 'B-' },
-    { id: 's7', name: 'Mr. Karthik Rao', designation: 'Lecturer', role: 'lecturer', departmentId: 'd1', email: 'karthik.r@college.edu', phone: '9876500007', subjects: ['Python Programming', 'Web Technologies'], classes: ['CSE-A Sem-2', 'CSE-B Sem-2'], status: 'active', attendancePct: 92, feedbackScore: 4.4, performanceRating: 4, pendingWork: 0, weeklyHours: 42, employmentType: 'full-time', joinedOn: '2019-08-05', qualifications: 'M.Tech (CSE)', publications: 2, researchProjects: 0, address: '40 Faculty Quarters', gender: 'Male', dob: '1990-12-05', bloodGroup: 'A-' },
-    { id: 's8', name: 'Ms. Sneha Iyer', designation: 'Teaching Assistant', role: 'teaching-assistant', departmentId: 'd1', email: 'sneha.i@college.edu', phone: '9876500008', subjects: ['Data Structures Lab', 'Python Lab'], classes: ['CSE-A Sem-3', 'CSE-A Sem-2'], status: 'on-leave', attendancePct: 91, feedbackScore: 4.3, performanceRating: 4, pendingWork: 0, weeklyHours: 44, employmentType: 'contract', joinedOn: '2021-01-10', qualifications: 'M.Tech (CSE)', publications: 1, researchProjects: 0, address: '50 Faculty Quarters', gender: 'Female', dob: '1995-07-18', bloodGroup: 'O+' },
-    // ECE
-    { id: 's9', name: 'Dr. Suresh Babu', designation: 'Professor & HOD', role: 'hod', departmentId: 'd2', email: 'hod.ece@college.edu', phone: '9876500009', subjects: ['VLSI Design'], classes: ['ECE-A Sem-6'], status: 'active', attendancePct: 96, feedbackScore: 4.6, performanceRating: 5, pendingWork: 0, weeklyHours: 36, employmentType: 'full-time', joinedOn: '2011-02-14', qualifications: 'Ph.D (ECE)', publications: 30, researchProjects: 3, address: '6 Faculty Quarters', gender: 'Male', dob: '1974-08-22', bloodGroup: 'B+' },
-    { id: 's10', name: 'Dr. Lakshmi Menon', designation: 'Professor', role: 'professor', departmentId: 'd2', email: 'lakshmi.m@college.edu', phone: '9876500010', subjects: ['Digital Signal Processing'], classes: ['ECE-A Sem-6'], status: 'active', attendancePct: 95, feedbackScore: 4.7, performanceRating: 5, pendingWork: 0, weeklyHours: 34, employmentType: 'full-time', joinedOn: '2013-07-01', qualifications: 'Ph.D (ECE)', publications: 25, researchProjects: 2, address: '15 Faculty Quarters', gender: 'Female', dob: '1978-03-05', bloodGroup: 'A+' },
-    { id: 's11', name: 'Dr. Vivek Krishnan', designation: 'Associate Professor', role: 'associate-professor', departmentId: 'd2', email: 'vivek.k@college.edu', phone: '9876500011', subjects: ['Microprocessors', 'Embedded Systems'], classes: ['ECE-A Sem-4'], status: 'on-leave', attendancePct: 88, feedbackScore: 4.5, performanceRating: 4, pendingWork: 3, weeklyHours: 36, employmentType: 'full-time', joinedOn: '2015-06-10', qualifications: 'Ph.D (ECE)', publications: 16, researchProjects: 1, address: '23 Faculty Quarters', gender: 'Male', dob: '1983-11-25', bloodGroup: 'O+' },
-    { id: 's12', name: 'Prof. Anu Thomas', designation: 'Assistant Professor', role: 'assistant-professor', departmentId: 'd2', email: 'anu.t@college.edu', phone: '9876500012', subjects: ['Analog Circuits', 'Signals & Systems'], classes: ['ECE-A Sem-3'], status: 'active', attendancePct: 93, feedbackScore: 4.4, performanceRating: 4, pendingWork: 1, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2018-07-15', qualifications: 'M.Tech (ECE)', publications: 5, researchProjects: 0, address: '31 Faculty Quarters', gender: 'Female', dob: '1989-06-20', bloodGroup: 'B-' },
-    { id: 's13', name: 'Mr. Aravind S', designation: 'Lab Assistant', role: 'lab-assistant', departmentId: 'd2', email: 'aravind.s@college.edu', phone: '9876500013', subjects: [], classes: [], status: 'active', attendancePct: 95, feedbackScore: 0, performanceRating: 0, pendingWork: 0, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2020-03-01', qualifications: 'Diploma (ECE)', publications: 0, researchProjects: 0, address: '60 Staff Quarters', gender: 'Male', dob: '1992-10-15', bloodGroup: 'A+' },
-    // MECH
-    { id: 's14', name: 'Dr. Mahesh Pandey', designation: 'Professor & HOD', role: 'hod', departmentId: 'd3', email: 'hod.mech@college.edu', phone: '9876500014', subjects: ['Thermodynamics'], classes: ['MECH-A Sem-4'], status: 'active', attendancePct: 95, feedbackScore: 4.5, performanceRating: 5, pendingWork: 0, weeklyHours: 36, employmentType: 'full-time', joinedOn: '2012-01-20', qualifications: 'Ph.D (MECH)', publications: 22, researchProjects: 2, address: '7 Faculty Quarters', gender: 'Male', dob: '1976-04-08', bloodGroup: 'O+' },
-    { id: 's15', name: 'Dr. Kavitha Ramesh', designation: 'Professor', role: 'professor', departmentId: 'd3', email: 'kavitha.r@college.edu', phone: '9876500015', subjects: ['Heat Transfer', 'Fluid Mechanics'], classes: ['MECH-A Sem-6'], status: 'active', attendancePct: 94, feedbackScore: 4.6, performanceRating: 5, pendingWork: 0, weeklyHours: 34, employmentType: 'full-time', joinedOn: '2014-08-01', qualifications: 'Ph.D (MECH)', publications: 20, researchProjects: 1, address: '16 Faculty Quarters', gender: 'Female', dob: '1979-12-12', bloodGroup: 'A-' },
-    { id: 's16', name: 'Prof. Rohit Desai', designation: 'Assistant Professor', role: 'assistant-professor', departmentId: 'd3', email: 'rohit.d@college.edu', phone: '9876500016', subjects: ['Machine Design', 'Manufacturing Process'], classes: ['MECH-A Sem-3'], status: 'active', attendancePct: 92, feedbackScore: 4.3, performanceRating: 4, pendingWork: 2, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2018-07-10', qualifications: 'M.Tech (MECH)', publications: 4, researchProjects: 0, address: '32 Faculty Quarters', gender: 'Male', dob: '1987-02-28', bloodGroup: 'B+' },
-    { id: 's17', name: 'Mr. Suresh G', designation: 'Lab Assistant', role: 'lab-assistant', departmentId: 'd3', email: 'suresh.g@college.edu', phone: '9876500017', subjects: [], classes: [], status: 'active', attendancePct: 94, feedbackScore: 0, performanceRating: 0, pendingWork: 0, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2020-06-01', qualifications: 'Diploma (MECH)', publications: 0, researchProjects: 0, address: '61 Staff Quarters', gender: 'Male', dob: '1991-09-09', bloodGroup: 'O-' },
-    // MTH
-    { id: 's18', name: 'Dr. Geeta Rao', designation: 'Professor & HOD', role: 'hod', departmentId: 'd4', email: 'hod.mth@college.edu', phone: '9876500018', subjects: ['Engineering Mathematics'], classes: ['CSE-A Sem-1', 'ECE-A Sem-1'], status: 'active', attendancePct: 96, feedbackScore: 4.7, performanceRating: 5, pendingWork: 0, weeklyHours: 32, employmentType: 'full-time', joinedOn: '2013-07-01', qualifications: 'Ph.D (Math)', publications: 30, researchProjects: 1, address: '9 Faculty Quarters', gender: 'Female', dob: '1977-05-14', bloodGroup: 'AB-' },
-    { id: 's19', name: 'Prof. Imran Khan', designation: 'Assistant Professor', role: 'assistant-professor', departmentId: 'd4', email: 'imran.k@college.edu', phone: '9876500019', subjects: ['Discrete Mathematics', 'Probability'], classes: ['CSE-A Sem-3', 'ECE-A Sem-3'], status: 'active', attendancePct: 93, feedbackScore: 4.4, performanceRating: 4, pendingWork: 1, weeklyHours: 38, employmentType: 'full-time', joinedOn: '2017-08-15', qualifications: 'M.Sc (Math)', publications: 3, researchProjects: 0, address: '33 Faculty Quarters', gender: 'Male', dob: '1986-11-30', bloodGroup: 'A+' },
-    // Non-teaching - Office Superintendent
-    { id: 's20', name: 'Mr. Ramesh Pillai', designation: 'Office Superintendent', role: 'office-superintendent', departmentId: 'd1', email: 'office.cse@college.edu', phone: '9876500020', subjects: [], classes: [], status: 'active', attendancePct: 97, feedbackScore: 0, performanceRating: 0, pendingWork: 0, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2010-04-01', qualifications: 'M.Com', publications: 0, researchProjects: 0, address: '70 Staff Quarters', gender: 'Male', dob: '1980-01-01', bloodGroup: 'B+' },
-    { id: 's21', name: 'Mrs. Deepa Nair', designation: 'Office Clerk', role: 'office-superintendent', departmentId: 'd2', email: 'office.ece@college.edu', phone: '9876500021', subjects: [], classes: [], status: 'active', attendancePct: 96, feedbackScore: 0, performanceRating: 0, pendingWork: 0, weeklyHours: 40, employmentType: 'full-time', joinedOn: '2012-05-15', qualifications: 'B.Com', publications: 0, researchProjects: 0, address: '71 Staff Quarters', gender: 'Female', dob: '1983-03-22', bloodGroup: 'O+' },
-  ],
-  students: [
-    { id: 'st1', name: 'Aarav Sharma', rollNo: 'CSE2021001', program: 'B.Tech CSE', semester: 6, section: 'A', departmentId: 'd1', email: 'aarav.s@stu.edu', phone: '9988776655', gender: 'Male', dob: '2003-04-15', bloodGroup: 'B+', address: '45 MG Road, Bengaluru', parentName: 'Mr. Suresh Sharma', parentPhone: '9988776650', parentEmail: 'suresh.s@email.com', admissionDate: '2021-08-01', admissionType: 'Merit', status: 'active', attendancePct: 92, gpa: 8.7, cgpa: 8.5, backlogs: 0, internalMarks: [{ subject: 'Advanced Algorithms', marks: 42, max: 50 }, { subject: 'Distributed Systems', marks: 45, max: 50 }, { subject: 'DBMS', marks: 40, max: 50 }], subjects: ['Advanced Algorithms', 'Distributed Systems', 'DBMS'], projectTitle: 'Distributed Ledger for Academic Credentials', projectGuide: 'Dr. Priya Sharma', projectProgress: 65, grievances: [{ id: 'g1', title: 'Lab timing conflict', status: 'resolved', date: '2026-02-10', assignedTo: 'Dr. Rajesh Kumar' }], discipline: [] },
-    { id: 'st2', name: 'Diya Patel', rollNo: 'CSE2021002', program: 'B.Tech CSE', semester: 6, section: 'A', departmentId: 'd1', email: 'diya.p@stu.edu', phone: '9988776656', gender: 'Female', dob: '2003-07-22', bloodGroup: 'O+', address: '12 Brigade Road, Bengaluru', parentName: 'Mr. Nilesh Patel', parentPhone: '9988776651', parentEmail: 'nilesh.p@email.com', admissionDate: '2021-08-01', admissionType: 'Merit', status: 'active', attendancePct: 95, gpa: 9.2, cgpa: 9.0, backlogs: 0, internalMarks: [{ subject: 'Advanced Algorithms', marks: 48, max: 50 }, { subject: 'Distributed Systems', marks: 47, max: 50 }, { subject: 'DBMS', marks: 46, max: 50 }], subjects: ['Advanced Algorithms', 'Distributed Systems', 'DBMS'], projectTitle: 'AI-based Resume Screening', projectGuide: 'Dr. Arjun Nair', projectProgress: 80, grievances: [], discipline: [] },
-    { id: 'st3', name: 'Vivaan Gupta', rollNo: 'CSE2021003', program: 'B.Tech CSE', semester: 6, section: 'A', departmentId: 'd1', email: 'vivaan.g@stu.edu', phone: '9988776657', gender: 'Male', dob: '2003-01-10', bloodGroup: 'A+', address: '78 Indiranagar, Bengaluru', parentName: 'Mr. Anil Gupta', parentPhone: '9988776652', parentEmail: 'anil.g@email.com', admissionDate: '2021-08-01', admissionType: 'Management', status: 'active', attendancePct: 74, gpa: 7.1, cgpa: 7.4, backlogs: 1, internalMarks: [{ subject: 'Advanced Algorithms', marks: 32, max: 50 }, { subject: 'Distributed Systems', marks: 28, max: 50 }, { subject: 'DBMS', marks: 35, max: 50 }], subjects: ['Advanced Algorithms', 'Distributed Systems', 'DBMS'], projectTitle: 'IoT Home Automation', projectGuide: 'Mr. Karthik Rao', projectProgress: 40, grievances: [{ id: 'g2', title: 'Project guide unavailable', status: 'open', date: '2026-07-05', assignedTo: 'Dr. Rajesh Kumar' }], discipline: [{ id: 'dc1', incident: 'Late entry to campus', date: '2026-03-15', action: 'Warning issued', status: 'closed' }] },
-    { id: 'st4', name: 'Ananya Reddy', rollNo: 'CSE2021004', program: 'B.Tech CSE', semester: 6, section: 'B', departmentId: 'd1', email: 'ananya.r@stu.edu', phone: '9988776658', gender: 'Female', dob: '2003-09-18', bloodGroup: 'AB+', address: '23 Koramangala, Bengaluru', parentName: 'Mrs. Lakshmi Reddy', parentPhone: '9988776653', parentEmail: 'lakshmi.r@email.com', admissionDate: '2021-08-01', admissionType: 'Merit', status: 'active', attendancePct: 88, gpa: 8.3, cgpa: 8.1, backlogs: 0, internalMarks: [{ subject: 'Advanced Algorithms', marks: 44, max: 50 }, { subject: 'Distributed Systems', marks: 41, max: 50 }, { subject: 'DBMS', marks: 43, max: 50 }], subjects: ['Advanced Algorithms', 'Distributed Systems', 'DBMS'], projectTitle: 'Blockchain-based Voting System', projectGuide: 'Dr. Priya Sharma', projectProgress: 70, grievances: [], discipline: [] },
-    { id: 'st5', name: 'Reyansh Singh', rollNo: 'CSE2022005', program: 'B.Tech CSE', semester: 4, section: 'A', departmentId: 'd1', email: 'reyansh.s@stu.edu', phone: '9988776659', gender: 'Male', dob: '2004-02-25', bloodGroup: 'B-', address: '56 Jayanagar, Bengaluru', parentName: 'Mr. Devendra Singh', parentPhone: '9988776654', parentEmail: 'dev.s@email.com', admissionDate: '2022-08-01', admissionType: 'Lateral', status: 'active', attendancePct: 81, gpa: 7.8, cgpa: 7.6, backlogs: 0, internalMarks: [{ subject: 'DBMS', marks: 38, max: 50 }, { subject: 'Cloud Computing', marks: 40, max: 50 }], subjects: ['DBMS', 'Cloud Computing'], projectTitle: 'Cloud-native Microservices Demo', projectGuide: 'Dr. Arjun Nair', projectProgress: 55, grievances: [], discipline: [] },
-    { id: 'st6', name: 'Ishaan Khanna', rollNo: 'CSE2023006', program: 'B.Tech CSE', semester: 2, section: 'A', departmentId: 'd1', email: 'ishaan.k@stu.edu', phone: '9988776660', gender: 'Male', dob: '2005-06-12', bloodGroup: 'O-', address: '9 Whitefield, Bengaluru', parentName: 'Mr. Rajiv Khanna', parentPhone: '9988776661', parentEmail: 'rajiv.k@email.com', admissionDate: '2023-08-01', admissionType: 'Merit', status: 'active', attendancePct: 90, gpa: 8.5, cgpa: 8.5, backlogs: 0, internalMarks: [{ subject: 'Python Programming', marks: 46, max: 50 }, { subject: 'Web Technologies', marks: 44, max: 50 }], subjects: ['Python Programming', 'Web Technologies'], projectTitle: '', projectGuide: '', projectProgress: 0, grievances: [], discipline: [] },
-    { id: 'st7', name: 'Saanvi Iyengar', rollNo: 'ECE2021001', program: 'B.Tech ECE', semester: 6, section: 'A', departmentId: 'd2', email: 'saanvi.i@stu.edu', phone: '9988776662', gender: 'Female', dob: '2003-03-30', bloodGroup: 'A+', address: '34 HSR Layout, Bengaluru', parentName: 'Mr. Vasudev Iyengar', parentPhone: '9988776663', parentEmail: 'vasu.i@email.com', admissionDate: '2021-08-01', admissionType: 'Merit', status: 'active', attendancePct: 93, gpa: 8.9, cgpa: 8.7, backlogs: 0, internalMarks: [{ subject: 'VLSI Design', marks: 45, max: 50 }, { subject: 'DSP', marks: 43, max: 50 }], subjects: ['VLSI Design', 'DSP'], projectTitle: 'Low-power VLSI Architecture', projectGuide: 'Dr. Lakshmi Menon', projectProgress: 72, grievances: [], discipline: [] },
-    { id: 'st8', name: 'Aditya Nair', rollNo: 'ECE2021002', program: 'B.Tech ECE', semester: 6, section: 'A', departmentId: 'd2', email: 'aditya.n@stu.edu', phone: '9988776664', gender: 'Male', dob: '2003-08-14', bloodGroup: 'B+', address: '67 Electronic City, Bengaluru', parentName: 'Mr. Sreekumar Nair', parentPhone: '9988776665', parentEmail: 'sree.n@email.com', admissionDate: '2021-08-01', admissionType: 'Management', status: 'active', attendancePct: 68, gpa: 6.5, cgpa: 6.8, backlogs: 2, internalMarks: [{ subject: 'VLSI Design', marks: 25, max: 50 }, { subject: 'DSP', marks: 30, max: 50 }], subjects: ['VLSI Design', 'DSP'], projectTitle: 'FPGA-based Signal Processor', projectGuide: 'Dr. Suresh Babu', projectProgress: 35, grievances: [{ id: 'g3', title: 'Low attendance warning', status: 'assigned', date: '2026-07-12', assignedTo: 'Dr. Vivek Krishnan' }], discipline: [] },
-    { id: 'st9', name: 'Myra Joshi', rollNo: 'MECH2021001', program: 'B.Tech MECH', semester: 6, section: 'A', departmentId: 'd3', email: 'myra.j@stu.edu', phone: '9988776666', gender: 'Female', dob: '2003-11-05', bloodGroup: 'O+', address: '11 Hebbal, Bengaluru', parentName: 'Mr. Aniket Joshi', parentPhone: '9988776667', parentEmail: 'aniket.j@email.com', admissionDate: '2021-08-01', admissionType: 'Merit', status: 'active', attendancePct: 91, gpa: 8.4, cgpa: 8.2, backlogs: 0, internalMarks: [{ subject: 'Heat Transfer', marks: 42, max: 50 }, { subject: 'Fluid Mechanics', marks: 44, max: 50 }], subjects: ['Heat Transfer', 'Fluid Mechanics'], projectTitle: 'Thermal Analysis of Heat Exchangers', projectGuide: 'Dr. Kavitha Ramesh', projectProgress: 68, grievances: [], discipline: [] },
-    { id: 'st10', name: 'Kabir Malhotra', rollNo: 'MECH2021002', program: 'B.Tech MECH', semester: 6, section: 'A', departmentId: 'd3', email: 'kabir.m@stu.edu', phone: '9988776668', gender: 'Male', dob: '2003-05-20', bloodGroup: 'A-', address: '88 Yelahanka, Bengaluru', parentName: 'Mr. Harish Malhotra', parentPhone: '9988776669', parentEmail: 'harish.m@email.com', admissionDate: '2021-08-01', admissionType: 'Lateral', status: 'active', attendancePct: 85, gpa: 7.9, cgpa: 7.7, backlogs: 0, internalMarks: [{ subject: 'Heat Transfer', marks: 39, max: 50 }, { subject: 'Fluid Mechanics', marks: 36, max: 50 }], subjects: ['Heat Transfer', 'Fluid Mechanics'], projectTitle: 'CFD Simulation of Airflow', projectGuide: 'Dr. Mahesh Pandey', projectProgress: 50, grievances: [], discipline: [{ id: 'dc2', incident: 'Ragging complaint', date: '2026-01-20', action: 'Under investigation', status: 'open' }] },
-  ],
-  subjects: [
-    { id: 'sub1', name: 'Advanced Algorithms', code: 'CS601', departmentId: 'd1', semester: 6, facultyId: 's4', syllabusCompletion: 78, unitsTotal: 5, unitsCompleted: 4, classes: ['CSE-A Sem-6', 'CSE-B Sem-6'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub2', name: 'Distributed Systems', code: 'CS602', departmentId: 'd1', semester: 6, facultyId: 's4', syllabusCompletion: 72, unitsTotal: 6, unitsCompleted: 4, classes: ['CSE-A Sem-6'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub3', name: 'Database Management Systems', code: 'CS401', departmentId: 'd1', semester: 4, facultyId: 's5', syllabusCompletion: 85, unitsTotal: 5, unitsCompleted: 4, classes: ['CSE-A Sem-4', 'CSE-B Sem-4'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub4', name: 'Cloud Computing', code: 'CS402', departmentId: 'd1', semester: 4, facultyId: 's5', syllabusCompletion: 68, unitsTotal: 5, unitsCompleted: 3, classes: ['CSE-A Sem-4'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub5', name: 'Data Structures', code: 'CS301', departmentId: 'd1', semester: 3, facultyId: 's6', syllabusCompletion: 90, unitsTotal: 5, unitsCompleted: 5, classes: ['CSE-A Sem-3', 'CSE-B Sem-3'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub6', name: 'Operating Systems', code: 'CS302', departmentId: 'd1', semester: 3, facultyId: 's6', syllabusCompletion: 82, unitsTotal: 6, unitsCompleted: 5, classes: ['CSE-A Sem-3'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub7', name: 'Python Programming', code: 'CS201', departmentId: 'd1', semester: 2, facultyId: 's7', syllabusCompletion: 88, unitsTotal: 4, unitsCompleted: 4, classes: ['CSE-A Sem-2', 'CSE-B Sem-2'], type: 'theory', credits: 3, weeklyHrs: 3, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub8', name: 'Web Technologies', code: 'CS202', departmentId: 'd1', semester: 2, facultyId: 's7', syllabusCompletion: 75, unitsTotal: 5, unitsCompleted: 4, classes: ['CSE-A Sem-2'], type: 'theory', credits: 3, weeklyHrs: 3, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub9', name: 'VLSI Design', code: 'EC601', departmentId: 'd2', semester: 6, facultyId: 's10', syllabusCompletion: 70, unitsTotal: 6, unitsCompleted: 4, classes: ['ECE-A Sem-6'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub10', name: 'Digital Signal Processing', code: 'EC602', departmentId: 'd2', semester: 6, facultyId: 's10', syllabusCompletion: 65, unitsTotal: 5, unitsCompleted: 3, classes: ['ECE-A Sem-6'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub11', name: 'Microprocessors', code: 'EC401', departmentId: 'd2', semester: 4, facultyId: 's11', syllabusCompletion: 55, unitsTotal: 5, unitsCompleted: 3, classes: ['ECE-A Sem-4'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub12', name: 'Heat Transfer', code: 'ME601', departmentId: 'd3', semester: 6, facultyId: 's15', syllabusCompletion: 80, unitsTotal: 5, unitsCompleted: 4, classes: ['MECH-A Sem-6'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub13', name: 'Fluid Mechanics', code: 'ME602', departmentId: 'd3', semester: 6, facultyId: 's15', syllabusCompletion: 76, unitsTotal: 6, unitsCompleted: 5, classes: ['MECH-A Sem-6'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub14', name: 'Engineering Mathematics', code: 'MA101', departmentId: 'd4', semester: 1, facultyId: 's18', syllabusCompletion: 92, unitsTotal: 5, unitsCompleted: 5, classes: ['CSE-A Sem-1', 'ECE-A Sem-1'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    { id: 'sub15', name: 'Discrete Mathematics', code: 'MA301', departmentId: 'd4', semester: 3, facultyId: 's19', syllabusCompletion: 84, unitsTotal: 4, unitsCompleted: 3, classes: ['CSE-A Sem-3'], type: 'theory', credits: 4, weeklyHrs: 4, suggestedResources: ['classroom', 'projector'] },
-    /* Lab / practical subjects demonstrate combined faculty + resource allocation */
-    { id: 'sub16', name: 'Data Structures Lab', code: 'CS302L', departmentId: 'd1', semester: 3, facultyId: 's8', syllabusCompletion: 70, unitsTotal: 4, unitsCompleted: 3, classes: ['CSE-A Sem-3', 'CSE-B Sem-3'], type: 'laboratory', credits: 2, weeklyHrs: 3, suggestedResources: ['other-equipment', 'computer', 'projector'] },
-    { id: 'sub17', name: 'DBMS Lab', code: 'CS403L', departmentId: 'd1', semester: 4, facultyId: '', syllabusCompletion: 40, unitsTotal: 4, unitsCompleted: 2, classes: ['CSE-A Sem-4', 'CSE-B Sem-4'], type: 'laboratory', credits: 2, weeklyHrs: 3, suggestedResources: ['other-equipment', 'computer', 'projector'] },
-    { id: 'sub18', name: 'Operating Systems Lab', code: 'CS303L', departmentId: 'd1', semester: 3, facultyId: '', syllabusCompletion: 35, unitsTotal: 4, unitsCompleted: 1, classes: ['CSE-A Sem-3', 'CSE-B Sem-3'], type: 'laboratory', credits: 2, weeklyHrs: 3, suggestedResources: ['other-equipment', 'computer', 'projector'] },
-  ],
-  timetable: [
-    { id: 't1', departmentId: 'd1', section: 'A', semester: 6, day: 'Monday', slot: '09:00-10:00', subject: 'Advanced Algorithms', facultyId: 's4', room: 'CS-101', isLab: false, published: true, status: 'approved' },
-    { id: 't2', departmentId: 'd1', section: 'A', semester: 6, day: 'Monday', slot: '10:00-11:00', subject: 'Distributed Systems', facultyId: 's4', room: 'CS-101', isLab: false, published: true, status: 'approved' },
-    { id: 't3', departmentId: 'd1', section: 'A', semester: 6, day: 'Monday', slot: '11:30-12:30', subject: 'DBMS', facultyId: 's5', room: 'CS-102', isLab: false, published: true, status: 'approved' },
-    { id: 't4', departmentId: 'd1', section: 'A', semester: 6, day: 'Tuesday', slot: '09:00-10:00', subject: 'Advanced Algorithms', facultyId: 's4', room: 'CS-101', isLab: false, published: true, status: 'approved' },
-    { id: 't5', departmentId: 'd1', section: 'A', semester: 6, day: 'Tuesday', slot: '10:00-11:00', subject: 'Distributed Systems', facultyId: 's4', room: 'CS-101', isLab: false, published: false, status: 'pending-principal' },
-    { id: 't6', departmentId: 'd1', section: 'A', semester: 4, day: 'Monday', slot: '09:00-10:00', subject: 'DBMS', facultyId: 's5', room: 'CS-201', isLab: false, published: true, status: 'approved' },
-    { id: 't7', departmentId: 'd1', section: 'A', semester: 4, day: 'Monday', slot: '10:00-11:00', subject: 'Cloud Computing', facultyId: 's5', room: 'CS-201', isLab: false, published: true, status: 'approved' },
-    { id: 't8', departmentId: 'd1', section: 'A', semester: 3, day: 'Monday', slot: '09:00-10:00', subject: 'Data Structures', facultyId: 's6', room: 'CS-301', isLab: false, published: true, status: 'approved' },
-    { id: 't9', departmentId: 'd2', section: 'A', semester: 6, day: 'Monday', slot: '09:00-10:00', subject: 'VLSI Design', facultyId: 's10', room: 'EC-101', isLab: false, published: true, status: 'approved' },
-    { id: 't10', departmentId: 'd2', section: 'A', semester: 6, day: 'Monday', slot: '10:00-11:00', subject: 'DSP', facultyId: 's10', room: 'EC-101', isLab: false, published: false, status: 'pending-principal' },
-    { id: 't11', departmentId: 'd3', section: 'A', semester: 6, day: 'Monday', slot: '09:00-10:00', subject: 'Heat Transfer', facultyId: 's15', room: 'ME-101', isLab: false, published: true, status: 'approved' },
-    { id: 't12', departmentId: 'd3', section: 'A', semester: 6, day: 'Monday', slot: '10:00-11:00', subject: 'Fluid Mechanics', facultyId: 's15', room: 'ME-101', isLab: false, published: true, status: 'approved' },
-  ],
-  approvals: [
-    { id: 'a1', type: 'timetable', title: 'CSE Sem-6 Section A Timetable', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-07-18', purpose: 'Department timetable for Sem-6', status: 'pending', details: { section: 'A', semester: '6', entries: '5' }, documents: [{ id: 'ad1', name: 'CSE_Sem6_TT.pdf', type: 'Timetable', size: '420 KB', uploaded: '2026-07-18' }], timetableEntries: [
-      { id: 'tt1', departmentId: 'd1', section: 'A', semester: 6, day: 'Monday', slot: '09:00-10:00', subject: 'Advanced Algorithms', facultyId: 's4', room: 'CS-101', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt2', departmentId: 'd1', section: 'A', semester: 6, day: 'Monday', slot: '10:00-11:00', subject: 'Distributed Systems', facultyId: 's4', room: 'CS-101', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt3', departmentId: 'd1', section: 'A', semester: 6, day: 'Tuesday', slot: '09:00-10:00', subject: 'Advanced Algorithms', facultyId: 's4', room: 'CS-101', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt4', departmentId: 'd1', section: 'A', semester: 6, day: 'Tuesday', slot: '10:00-11:00', subject: 'DBMS', facultyId: 's5', room: 'CS-102', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt5', departmentId: 'd1', section: 'A', semester: 6, day: 'Wednesday', slot: '09:00-10:00', subject: 'Distributed Systems', facultyId: 's4', room: 'CS-101', isLab: false, published: false, status: 'pending-principal' },
-] },
-{ id: 'a2', type: 'leave', title: 'Leave request - Dr. Vivek Krishnan', submittedBy: 'Dr. Vivek Krishnan', submittedByRole: 'associate-professor', departmentId: 'd2', date: '2026-07-15', purpose: 'Medical leave for 5 days', status: 'pending', deanStatus: 'pending', hodStatus: 'pending', details: { from: '2026-07-20', to: '2026-07-25', days: '5', type: 'Medical', reason: 'Scheduled surgery and recovery', balance: '12 days' }, documents: [{ id: 'ad2', name: 'Medical_Certificate.pdf', type: 'Medical', size: '180 KB', uploaded: '2026-07-15' }, { id: 'ad3', name: 'Leave_Application.pdf', type: 'Application', size: '95 KB', uploaded: '2026-07-15' }] },
-{ id: 'a2b', type: 'leave', title: 'Leave request - Dr. Priya Sharma', submittedBy: 'Dr. Priya Sharma', submittedByRole: 'professor', departmentId: 'd1', date: '2026-07-18', purpose: 'Casual leave for 3 days', status: 'pending', deanStatus: 'pending', hodStatus: 'recommended', hodRemarks: 'Workload covered by substitute. Recommended.', details: { from: '2026-07-25', to: '2026-07-27', days: '3', type: 'Casual', reason: 'Personal family function', balance: '8 days' }, documents: [{ id: 'ad3b', name: 'Leave_Application.pdf', type: 'Application', size: '90 KB', uploaded: '2026-07-18' }] },
-    { id: 'a2c', type: 'leave', title: 'Leave request - Dr. Rajesh Kumar', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-07-19', purpose: 'Earned leave for 4 days', status: 'pending', deanStatus: 'pending', details: { from: '2026-08-01', to: '2026-08-04', days: '4', type: 'Earned', reason: 'Attending national conference on engineering education', balance: '15 days' }, documents: [{ id: 'ad3c', name: 'Leave_Application.pdf', type: 'Application', size: '88 KB', uploaded: '2026-07-19' }] },
-    { id: 'a2d', type: 'leave', title: 'Leave request - Dr. Anjali Mehta', submittedBy: 'Dr. Anjali Mehta', submittedByRole: 'dean', departmentId: 'd1', date: '2026-07-20', purpose: 'Casual leave for 2 days', status: 'pending', deanStatus: 'recommended', deanRemarks: 'Administrative duties delegated to HODs during absence.', details: { from: '2026-08-05', to: '2026-08-06', days: '2', type: 'Casual', reason: 'Personal work', balance: '10 days' }, documents: [{ id: 'ad3d', name: 'Leave_Application.pdf', type: 'Application', size: '85 KB', uploaded: '2026-07-20' }] },
-    { id: 'a3', type: 'event', title: 'TechFest 2026 - CSE', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-07-10', amount: 150000, purpose: 'Annual technical fest with workshops and competitions', status: 'pending', details: { date: '2026-08-15', venue: 'Main Auditorium', budget: '150000' }, documents: [{ id: 'ad4', name: 'TechFest_Proposal.pdf', type: 'Proposal', size: '1.2 MB', uploaded: '2026-07-10' }, { id: 'ad5', name: 'Budget_Estimate.xlsx', type: 'Budget', size: '64 KB', uploaded: '2026-07-10' }] },
-    { id: 'a4', type: 'budget', title: 'Lab Equipment Budget - ECE', submittedBy: 'Dr. Suresh Babu', submittedByRole: 'hod', departmentId: 'd2', date: '2026-07-08', amount: 850000, purpose: 'Procurement of oscilloscopes and FPGA kits', status: 'pending', details: { items: 'Oscilloscopes x10, FPGA kits x20', amount: '850000' }, documents: [{ id: 'ad6', name: 'ECE_Budget_Request.pdf', type: 'Budget', size: '320 KB', uploaded: '2026-07-08' }, { id: 'ad7', name: 'Vendor_Quotation.pdf', type: 'Quotation', size: '540 KB', uploaded: '2026-07-08' }] },
-    { id: 'a5', type: 'purchase', title: 'New Servers for CSE Lab', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-07-05', amount: 450000, purpose: 'Two rack servers for cloud computing lab', status: 'pending', details: { items: 'Dell PowerEdge x2', vendor: 'Dell India', amount: '450000' }, documents: [{ id: 'ad8', name: 'Purchase_Requisition.pdf', type: 'Requisition', size: '210 KB', uploaded: '2026-07-05' }, { id: 'ad9', name: 'Dell_Quotation.pdf', type: 'Quotation', size: '380 KB', uploaded: '2026-07-05' }] },
-    { id: 'a6', type: 'recruitment', title: 'Recruitment - Asst Prof (CSE)', submittedBy: 'Dr. Anjali Mehta', submittedByRole: 'dean', departmentId: 'd1', date: '2026-06-28', purpose: 'New Assistant Professor for AI/ML specialization', status: 'pending', shortlistedCandidateIds: [], details: { designation: 'Assistant Professor', vacancy: '1', qualification: 'PhD in Computer Science with AI/ML specialization', justification: 'Additional faculty needed to cover growing AI/ML elective demand and lab supervision requirements' }, documents: [{ id: 'ad10', name: 'Recruitment_Requisition.pdf', type: 'Requisition', size: '250 KB', uploaded: '2026-06-28' }] },
-    { id: 'a7', type: 'promotion', title: 'Promotion - Dr. Arjun Nair', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-06-20', purpose: 'Associate Professor to Professor', status: 'dean-recommended', deanStatus: 'recommended', deanRemarks: 'Excellent research record, eligible for promotion', details: { current: 'Associate Professor', requested: 'Professor', experience: '12 years' }, documents: [{ id: 'ad11', name: 'Promotion_Application.pdf', type: 'Application', size: '190 KB', uploaded: '2026-06-20' }, { id: 'ad12', name: 'Appraisal_Report.pdf', type: 'Appraisal', size: '410 KB', uploaded: '2026-06-20' }] },
-    { id: 'a8', type: 'timetable', title: 'ECE Sem-6 Section A Timetable', submittedBy: 'Dr. Suresh Babu', submittedByRole: 'hod', departmentId: 'd2', date: '2026-07-19', purpose: 'Department timetable for Sem-6', status: 'pending', details: { section: 'A', semester: '6', entries: '4' }, documents: [{ id: 'ad13', name: 'ECE_Sem6_TT.pdf', type: 'Timetable', size: '390 KB', uploaded: '2026-07-19' }], timetableEntries: [
-      { id: 'tt6', departmentId: 'd2', section: 'A', semester: 6, day: 'Monday', slot: '09:00-10:00', subject: 'VLSI Design', facultyId: 's10', room: 'EC-101', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt7', departmentId: 'd2', section: 'A', semester: 6, day: 'Monday', slot: '10:00-11:00', subject: 'DSP', facultyId: 's10', room: 'EC-101', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt8', departmentId: 'd2', section: 'A', semester: 6, day: 'Tuesday', slot: '09:00-10:00', subject: 'VLSI Design', facultyId: 's10', room: 'EC-101', isLab: false, published: false, status: 'pending-principal' },
-      { id: 'tt9', departmentId: 'd2', section: 'A', semester: 6, day: 'Tuesday', slot: '10:00-11:00', subject: 'DSP', facultyId: 's10', room: 'EC-101', isLab: false, published: false, status: 'pending-principal' },
-    ] },
-    { id: 'a9', type: 'syllabus', title: 'CSE Sem-6 Syllabus Review', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-08-01', purpose: 'Semester 6 syllabus review and principal approval', status: 'pending', details: { department: 'CSE', semester: '6', subjects: 'Advanced Algorithms, Distributed Systems', remarks: 'Prepared by the HOD with faculty inputs' }, documents: [{ id: 'ad14', name: 'CSE_Sem6_Syllabus.pdf', type: 'Syllabus', size: '280 KB', uploaded: '2026-08-01' }] },
-    { id: 'a10', type: 'result', title: 'CSE Sem-6 Result Publication Approval', submittedBy: 'Dr. Rajesh Kumar', submittedByRole: 'hod', departmentId: 'd1', date: '2026-08-04', purpose: 'Approval to publish semester results for all CSE classes', status: 'pending', details: { department: 'CSE', semester: '6', classes: 'CSE-A, CSE-B', submittedBy: 'Teaching faculty and HOD', remarks: 'Marks verified and sent for publication approval' }, documents: [{ id: 'ad15', name: 'CSE_Sem6_Result_Summary.pdf', type: 'Result', size: '310 KB', uploaded: '2026-08-04' }] },
-  ],
-  labs: [
-    { id: 'l1', name: 'Programming Lab - 1', departmentId: 'd1', capacity: 60, inChargeId: 's8', subjects: ['Data Structures Lab', 'Python Lab'], systems: 60, equipment: [{ name: 'Desktop PC', qty: 60, status: 'available' }, { name: 'Projector', qty: 1, status: 'available' }, { name: 'Server', qty: 1, status: 'under-repair' }], maintenanceStatus: 'good' },
-    { id: 'l2', name: 'Networking Lab', departmentId: 'd1', capacity: 40, inChargeId: 's7', subjects: ['Networks Lab'], systems: 40, equipment: [{ name: 'Router', qty: 8, status: 'available' }, { name: 'Switch', qty: 12, status: 'available' }, { name: 'Crimping Tool', qty: 10, status: 'available' }], maintenanceStatus: 'needs-attention' },
-    { id: 'l3', name: 'Cloud Computing Lab', departmentId: 'd1', capacity: 50, inChargeId: 's5', subjects: ['Cloud Lab'], systems: 50, equipment: [{ name: 'Rack Server', qty: 2, status: 'available' }, { name: 'Workstation', qty: 50, status: 'available' }], maintenanceStatus: 'good' },
-    { id: 'l4', name: 'VLSI Lab', departmentId: 'd2', capacity: 30, inChargeId: 's13', subjects: ['VLSI Lab'], systems: 30, equipment: [{ name: 'Oscilloscope', qty: 15, status: 'available' }, { name: 'FPGA Kit', qty: 30, status: 'available' }, { name: 'Signal Generator', qty: 10, status: 'under-repair' }], maintenanceStatus: 'good' },
-    { id: 'l5', name: 'Embedded Systems Lab', departmentId: 'd2', capacity: 30, inChargeId: 's13', subjects: ['Embedded Lab'], systems: 30, equipment: [{ name: 'Microcontroller Kit', qty: 30, status: 'available' }, { name: 'Arduino Board', qty: 40, status: 'available' }], maintenanceStatus: 'good' },
-    { id: 'l6', name: 'Thermal Engineering Lab', departmentId: 'd3', capacity: 25, inChargeId: 's17', subjects: ['Thermal Lab'], systems: 5, equipment: [{ name: 'Heat Exchanger', qty: 4, status: 'available' }, { name: 'Wind Tunnel', qty: 1, status: 'available' }, { name: 'Thermocouple', qty: 20, status: 'available' }], maintenanceStatus: 'needs-attention' },
-  ],
-  grievances: [
-    { id: 'gr1', title: 'Lab timing conflict', studentId: 'st1', departmentId: 'd1', date: '2026-02-10', status: 'closed', assignedTo: 'Dr. Rajesh Kumar', description: 'Programming lab overlaps with theory class', resolution: 'Rescheduled lab to evening slot', history: [{ date: '2026-02-10', action: 'Grievance logged', by: 'Student' }, { date: '2026-02-11', action: 'Assigned to HOD', by: 'HOD' }, { date: '2026-02-15', action: 'Resolved', by: 'Dr. Rajesh Kumar' }] },
-    { id: 'gr2', title: 'Project guide unavailable', studentId: 'st3', departmentId: 'd1', date: '2026-07-05', status: 'open', assignedTo: 'Dr. Rajesh Kumar', description: 'Guide not available for project reviews', resolution: '', history: [{ date: '2026-07-05', action: 'Grievance logged', by: 'Student' }] },
-    { id: 'gr3', title: 'Low attendance warning', studentId: 'st8', departmentId: 'd2', date: '2026-07-12', status: 'assigned', assignedTo: 'Dr. Vivek Krishnan', description: 'Student attendance at 68%, below 75% threshold', resolution: '', history: [{ date: '2026-07-12', action: 'Grievance logged', by: 'System' }, { date: '2026-07-12', action: 'Assigned to faculty', by: 'HOD' }] },
-  ],
-  committees: [
-    { id: 'c1', name: 'College Council', type: 'council', members: ['Dr. Vikram Rathore', 'Dr. Anjali Mehta', 'Dr. Rajesh Kumar', 'Dr. Suresh Babu', 'Dr. Mahesh Pandey', 'Dr. Geeta Rao'], meetingDate: '2026-08-01', agenda: 'Annual academic plan and budget review' },
-    { id: 'c2', name: 'Admission Committee 2026', type: 'admission', members: ['Dr. Anjali Mehta', 'Dr. Rajesh Kumar', 'Dr. Suresh Babu'], meetingDate: '2026-07-25', agenda: 'Review admission applications and seat allocation' },
-    { id: 'c3', name: 'Grievance Redressal Committee', type: 'grievance', members: ['Dr. Vikram Rathore', 'Dr. Geeta Rao', 'Mr. Ramesh Pillai'], meetingDate: '2026-07-30', agenda: 'Review pending student and parent grievances' },
-    { id: 'c4', name: 'IQAC Committee', type: 'iqac', members: ['Dr. Anjali Mehta', 'Dr. Priya Sharma', 'Dr. Lakshmi Menon'], meetingDate: '2026-08-05', agenda: 'NAAC compliance review and quality audit' },
-  ],
-  publications: [
-    { id: 'p1', facultyId: 's4', title: 'Consensus in Distributed Ledgers: A Survey', type: 'journal', journal: 'IEEE Transactions', year: 2025, departmentId: 'd1' },
-    { id: 'p2', facultyId: 's4', title: 'Sharding for Scalable Blockchains', type: 'conference', journal: 'ICDCS 2025', year: 2025, departmentId: 'd1' },
-    { id: 'p3', facultyId: 's5', title: 'Multi-tenant Database Architectures', type: 'journal', journal: 'ACM TODS', year: 2024, departmentId: 'd1' },
-    { id: 'p4', facultyId: 's10', title: 'Low-power DSP for IoT', type: 'journal', journal: 'IEEE Signal Processing', year: 2025, departmentId: 'd2' },
-    { id: 'p5', facultyId: 's15', title: 'CFD Analysis of Heat Exchangers', type: 'journal', journal: 'ASME Journal', year: 2024, departmentId: 'd3' },
-    { id: 'p6', facultyId: 's18', title: 'Numerical Methods for PDEs', type: 'book-chapter', journal: 'Springer', year: 2023, departmentId: 'd4' },
-  ],
-  researchProjects: [
-    { id: 'rp1', facultyId: 's4', title: 'Blockchain-based Academic Credentialing', fundingAgency: 'DST', amount: 2500000, status: 'ongoing', startDate: '2024-01-01', departmentId: 'd1' },
-    { id: 'rp2', facultyId: 's10', title: 'AI Accelerator for Edge Devices', fundingAgency: 'MeitY', amount: 1800000, status: 'ongoing', startDate: '2023-06-01', departmentId: 'd2' },
-    { id: 'rp3', facultyId: 's15', title: 'Thermal Management of EV Batteries', fundingAgency: 'SERB', amount: 1500000, status: 'completed', startDate: '2022-01-01', departmentId: 'd3' },
-  ],
-  exams: [
-    { id: 'e1', departmentId: 'd1', examName: 'Internal Examination', examType: 'Internal Examination', semester: 6, date: '2026-08-10', timing: '09:00-10:30', duration: '90 min', subject: 'Advanced Algorithms', hall: 'Hall A', invigilatorId: 's4', facultyId: 's4', status: 'published', marksSubmissionDeadline: '2026-08-17', marksEntered: 48, marksSubmitted: true },
-    { id: 'e2', departmentId: 'd1', examName: 'Internal Examination', examType: 'Internal Examination', semester: 6, date: '2026-09-11', timing: '09:00-10:30', duration: '90 min', subject: 'Distributed Systems', hall: 'Hall A', invigilatorId: 's5', facultyId: 's5', status: 'published', marksSubmissionDeadline: '2026-09-18', marksEntered: 2 },
-    { id: 'e3', departmentId: 'd1', examName: 'Internal Examination', examType: 'Internal Examination', semester: 4, date: '2026-09-12', timing: '09:00-10:30', duration: '90 min', subject: 'DBMS', hall: 'Hall B', invigilatorId: 's6', facultyId: 's6', status: 'published', marksSubmissionDeadline: '2026-09-19', marksEntered: 0 },
-    { id: 'e4', departmentId: 'd2', examName: 'Sem-6 Internal Assessment - 1', semester: 6, date: '2026-08-10', timing: '11:00-12:30', duration: '90 min', subject: 'VLSI Design', hall: 'Hall C', invigilatorId: 's10' },
-    { id: 'e5', departmentId: 'd3', examName: 'Sem-6 Internal Assessment - 1', semester: 6, date: '2026-08-13', timing: '09:00-10:30', duration: '90 min', subject: 'Heat Transfer', hall: 'Hall D', invigilatorId: 's15' },
-  ],
-  notifications: [
-    { id: 'n1', title: 'Timetable pending approval', message: 'CSE Sem-6 timetable awaiting Principal approval', date: '2026-07-18', audience: ['principal', 'hod'], read: false },
-{ id: 'n2', title: 'New leave request', message: 'Dr. Vivek Krishnan applied for medical leave', date: '2026-07-15', audience: ['hod', 'dean'], read: false },
-    { id: 'n3', title: 'Grievance assigned', message: 'Student grievance assigned to Dr. Vivek Krishnan', date: '2026-07-12', audience: ['associate-professor'], read: false },
-    { id: 'n4', title: 'Exam schedule published', message: 'Internal Assessment - 1 schedule released', date: '2026-07-10', audience: ['hod', 'professor', 'associate-professor', 'assistant-professor', 'lecturer'], read: false },
-  ],
-  scholars: [
-    { id: 'ph1', name: 'Rahul Verma', topic: 'Scalable Consensus Mechanisms for Permissioned Blockchains', startDate: '2024-01-15', year: 2, background: 'B.Tech CSE, 2 years industry experience at Infosys as blockchain developer', qualification: 'B.Tech (CSE), GATE-qualified', progress: 60, milestone: 'Literature Review & Problem Formulation', status: 'active', publications: 2, supervisor: 'Dr. Priya Sharma' },
-    { id: 'ph2', name: 'Priya Iyer', topic: 'Privacy-Preserving Federated Learning for Healthcare', startDate: '2023-08-01', year: 3, background: 'M.Tech CSE, research intern at IIT Bombay on ML privacy', qualification: 'M.Tech (CSE), CSIR-NET qualified', progress: 75, milestone: 'Data Collection & Experimentation', status: 'active', publications: 4, supervisor: 'Dr. Priya Sharma' },
-    { id: 'ph3', name: 'Arjun Reddy', topic: 'Zero-Knowledge Proof Systems for Verifiable Computation', startDate: '2025-07-01', year: 1, background: 'B.Tech CSE, published in undergraduate cryptography conference', qualification: 'B.Tech (CSE)', progress: 20, milestone: 'Proposal Defense', status: 'active', publications: 1, supervisor: 'Dr. Priya Sharma' },
-    { id: 'ph4', name: 'Neha Joshi', topic: 'Differential Privacy in Spatial Data Mining', startDate: '2022-06-15', year: 4, background: 'M.Tech CSE, 3 years teaching experience', qualification: 'M.Tech (CSE), UGC-NET qualified', progress: 90, milestone: 'Thesis Submission', status: 'submitted', publications: 6, supervisor: 'Dr. Priya Sharma' },
-  ],
-  candidates: [
-    { id: 'c1', name: 'Dr. Rohit Sen', qualification: 'Ph.D (AI/ML), IIT Madras', experience: '8 years (5 teaching + 3 industry)', appliedFor: 'Assistant Professor (CSE - AI/ML)', departmentId: 'd1', status: 'interviewed', interviewScore: 88, interviewNotes: 'Excellent knowledge of deep learning and NLP. Strong publication record. Recommended for selection.', documents: [{ id: 'cd1', name: 'Resume_Rohit_Sen.pdf', type: 'Resume', size: '220 KB' }, { id: 'cd2', name: 'PhD_Certificate.pdf', type: 'Certificate', size: '180 KB' }, { id: 'cd3', name: 'Publications_List.pdf', type: 'Publications', size: '340 KB' }, { id: 'cd4', name: 'Experience_Letters.zip', type: 'Experience', size: '1.1 MB' }] },
-    { id: 'c2', name: 'Dr. Meera Kapadia', qualification: 'Ph.D (Computer Networks), IISc Bangalore', experience: '6 years teaching', appliedFor: 'Assistant Professor (CSE - Networks)', departmentId: 'd1', status: 'shortlisted', interviewScore: 0, interviewNotes: '', documents: [{ id: 'cd5', name: 'Resume_Meera_Kapadia.pdf', type: 'Resume', size: '195 KB' }, { id: 'cd6', name: 'PhD_Thesis.pdf', type: 'Thesis', size: '2.4 MB' }, { id: 'cd7', name: 'References.pdf', type: 'References', size: '120 KB' }] },
-    { id: 'c3', name: 'Dr. Sanjay Rao', qualification: 'Ph.D (Cybersecurity), IIIT Hyderabad', experience: '10 years (7 teaching + 3 research)', appliedFor: 'Associate Professor (CSE - Security)', departmentId: 'd1', status: 'interviewed', interviewScore: 92, interviewNotes: 'Outstanding research profile with funded projects. Highly recommended.', documents: [{ id: 'cd8', name: 'Resume_Sanjay_Rao.pdf', type: 'Resume', size: '260 KB' }, { id: 'cd9', name: 'PhD_Certificate.pdf', type: 'Certificate', size: '175 KB' }, { id: 'cd10', name: 'Research_Projects.pdf', type: 'Projects', size: '480 KB' }, { id: 'cd11', name: 'Publications.pdf', type: 'Publications', size: '520 KB' }] },
-  ],
-  messages: [
-    { id: 'm1', fromId: 's20', fromName: 'Mr. Ramesh Pillai', fromRole: 'office-superintendent', toRole: 'principal', toName: 'Dr. Vikram Rathore', subject: 'Monthly attendance report - July 2026', body: 'Sir, Please find attached the consolidated monthly attendance report for all non-teaching staff for July 2026. Two staff members have attendance below 90%. Kindly review.', date: '2026-07-19', read: false },
-    { id: 'm2', fromId: 's20', fromName: 'Mr. Ramesh Pillai', fromRole: 'office-superintendent', toRole: 'hod', toName: 'Dr. Rajesh Kumar', subject: 'Faculty leave records update', body: 'Dr. Rajesh, I have updated the faculty leave records for the CSE department. Please review at your convenience.', date: '2026-07-16', read: false },
-    { id: 'm3', fromId: 's21', fromName: 'Mrs. Deepa Nair', fromRole: 'office-superintendent', toRole: 'principal', toName: 'Dr. Vikram Rathore', subject: 'Inventory status update - ECE dept', body: 'Sir, The ECE department inventory audit is complete. 3 items need replacement. Detailed report attached.', date: '2026-07-14', read: true },
-  ],
-  policies: [
-    { id: 'pol1', title: 'Continuous Evaluation Policy Revision', category: 'Academic', status: 'under-review', submittedBy: 'Dr. Priya Sharma', date: '2026-07-15', description: 'Proposed revision to increase weightage of continuous internal assessment from 30% to 40% of total marks, reducing end-semester exam weight to 60%.', recommendations: 'Implement from next academic year. Faculty training required for standardized rubrics. Pilot in CSE department first.' },
-    { id: 'pol2', title: 'Research Publication Incentive Policy', category: 'Research', status: 'approved', submittedBy: 'Dr. Priya Sharma', date: '2026-05-10', description: 'Incentive scheme for faculty publishing in Q1/Q2 journals — monetary reward and reduced teaching load for one semester.', recommendations: 'Approved with budget allocation of Rs. 5 lakhs annually. Cap of 2 incentives per faculty per year.' },
-    { id: 'pol3', title: 'Mentoring Framework Standardization', category: 'Student Welfare', status: 'draft', submittedBy: 'Dr. Priya Sharma', date: '2026-07-20', description: 'Standardize the mentoring process across departments with documented meeting frequency, progress tracking, and escalation paths.', recommendations: 'Minimum 2 meetings per semester. Digital tracking via portal. Escalation to HOD after 3 missed meetings.' },
-    { id: 'pol4', title: 'Open Elective Course Policy', category: 'Academic', status: 'approved', submittedBy: 'Dr. Priya Sharma', date: '2026-03-22', description: 'Allow students to take one open elective per semester from any department to encourage interdisciplinary learning.', recommendations: 'Prerequisite enforcement by course coordinator. Max 60 students per elective.' },
-  ],
-  examAttendance: [
-    { id: 'ea1', examId: 'e1', studentId: 'st1', status: 'present', remarks: '' },
-    { id: 'ea2', examId: 'e1', studentId: 'st2', status: 'present', remarks: '' },
-    { id: 'ea3', examId: 'e1', studentId: 'st3', status: 'absent', remarks: 'No prior intimation' },
-    { id: 'ea4', examId: 'e1', studentId: 'st4', status: 'present', remarks: '' },
-    { id: 'ea5', examId: 'e2', studentId: 'st1', status: 'present', remarks: '' },
-    { id: 'ea6', examId: 'e2', studentId: 'st2', status: 'medical-leave', remarks: 'Medical certificate submitted' },
-    { id: 'ea7', examId: 'e2', studentId: 'st3', status: 'present', remarks: '' },
-    { id: 'ea8', examId: 'e4', studentId: 'st7', status: 'present', remarks: '' },
-    { id: 'ea9', examId: 'e4', studentId: 'st8', status: 'malpractice', remarks: 'Found with unauthorized notes — reported to exam committee' },
-    { id: 'ea10', examId: 'e5', studentId: 'st9', status: 'present', remarks: '' },
-    { id: 'ea11', examId: 'e5', studentId: 'st10', status: 'absent', remarks: 'Late arrival beyond grace period' },
-  ],
-  liaison: [
-    { id: 'li1', category: 'university', title: 'Exam Notification - End Semester Aug 2026', from: 'University Registrar', date: '2026-07-18', type: 'Circular', description: 'University circular regarding end-semester examination schedule and submission of internal marks by 5 August 2026.', status: 'acknowledged', deadline: '2026-08-05' },
-    { id: 'li2', category: 'university', title: 'Revised Syllabus Guidelines 2026-27', from: 'Academic Council', date: '2026-07-10', type: 'Guideline', description: 'Updated syllabus framework with new elective structure. Implementation required from next academic year.', status: 'forwarded', deadline: '2026-12-01', assignedTo: 'All HODs' },
-    { id: 'li3', category: 'university', title: 'Annual Report Submission Reminder', from: 'University Registrar', date: '2026-07-05', type: 'Deadline', description: 'Annual academic performance report to be uploaded to university portal.', status: 'submitted', deadline: '2026-07-31' },
-    { id: 'li4', category: 'government', title: 'AICTE Compliance - Faculty Qualification Report', from: 'AICTE Regional Office', date: '2026-07-15', type: 'Compliance', description: 'Submit faculty qualification and experience records for AICTE compliance audit.', status: 'pending', deadline: '2026-08-15', assignedTo: 'All HODs' },
-    { id: 'li5', category: 'government', title: 'Scholarship Disbursement - SC/ST Students', from: 'Social Welfare Dept', date: '2026-07-08', type: 'Notice', description: 'Government notice regarding scholarship disbursement. Verify student eligibility and submit list.', status: 'acknowledged', deadline: '2026-08-10', assignedTo: 'Office Superintendent' },
-    { id: 'li6', category: 'accreditation', title: 'NAAC Self-Study Report - Criterion 1', from: 'NAAC Coordinator', date: '2026-07-12', type: 'Evidence', description: 'Upload evidence documents for Criterion 1 (Curricular Aspects).', status: 'submitted', deadline: '2026-09-30', criteria: [{ name: '1.1 Curricular Design', progress: 90 }, { name: '1.2 Academic Flexibility', progress: 85 }, { name: '1.3 Curriculum Enrichment', progress: 80 }, { name: '1.4 Feedback System', progress: 75 }] },
-    { id: 'li7', category: 'accreditation', title: 'NAAC - Criterion 2 (Teaching-Learning)', from: 'NAAC Coordinator', date: '2026-07-12', type: 'Evidence', description: 'Upload evidence for Criterion 2.', status: 'pending', deadline: '2026-09-30', criteria: [{ name: '2.1 Student Enrolment', progress: 88 }, { name: '2.2 Teaching-Learning Process', progress: 78 }, { name: '2.3 Teacher Quality', progress: 82 }, { name: '2.4 Evaluation System', progress: 80 }] },
-    { id: 'li8', category: 'accreditation', title: 'NBA Accreditation - CSE Program', from: 'NBA Expert Committee', date: '2026-06-20', type: 'Audit', description: 'NBA program accreditation audit for CSE. Prepare program outcomes evidence and student attainment data.', status: 'pending', deadline: '2026-10-15', criteria: [{ name: 'Program Outcomes', progress: 72 }, { name: 'Program Specific Outcomes', progress: 68 }, { name: 'Course Outcomes', progress: 75 }, { name: 'Attainment', progress: 65 }] },
-    { id: 'li9', category: 'parent', title: 'Parent-Teacher Meeting - Sem 6', from: 'Administration', date: '2026-07-01', type: 'Announcement', description: 'Schedule PTM for Sem-6 students. Send announcements to parents and collect feedback.', status: 'acknowledged', deadline: '2026-08-20' },
-    { id: 'li10', category: 'parent', title: 'Parent Feedback - Academic Year 2025-26', from: 'Parent Representatives', date: '2026-06-28', type: 'Feedback', description: 'Consolidated parent feedback received. Key concerns: lab infrastructure, hostel facilities, and exam scheduling.', status: 'closed' },
-    { id: 'li11', category: 'parent', title: 'Grievance - Bus Route Change Request', from: 'Parent (Mr. Suresh Sharma)', date: '2026-07-14', type: 'Grievance', description: 'Parent raised concern about bus route timing for student Aarav Sharma (CSE2021001). Requested earlier pickup.', status: 'pending', assignedTo: 'Transport In-Charge' },
-  ],
-  rooms: [
-    { id: 'r1', name: 'CS-101', departmentId: 'd1', capacity: 60 },
-    { id: 'r2', name: 'CS-102', departmentId: 'd1', capacity: 60 },
-    { id: 'r3', name: 'CS-201', departmentId: 'd1', capacity: 60 },
-    { id: 'r4', name: 'CS-301', departmentId: 'd1', capacity: 60 },
-    { id: 'r5', name: 'EC-101', departmentId: 'd2', capacity: 30 },
-    { id: 'r6', name: 'EC-102', departmentId: 'd2', capacity: 30 },
-    { id: 'r7', name: 'ME-101', departmentId: 'd3', capacity: 45 },
-    { id: 'r8', name: 'ME-102', departmentId: 'd3', capacity: 45 },
-    { id: 'r9', name: 'Main Auditorium', departmentId: 'd1', capacity: 300 },
-  ],
-  complaints: [
-    { id: 'cmp1', title: 'Classroom disturbance during lecture', description: 'Students from Section B were causing disturbance in the corridor during the 3rd hour lecture in CS-101.', filedBy: 'Dr. Priya Sharma', filedById: 's2', filedByRole: 'professor', departmentId: 'd1', date: '2026-07-18', status: 'investigating', category: 'student-discipline', against: 'CSE-A Sem-3 students' },
-    { id: 'cmp2', title: 'Lab equipment malfunction', description: 'Three systems in the Network Lab are not booting, affecting the OS lab session for Sem-5.', filedBy: 'Rahul Verma', filedById: 's11', filedByRole: 'lab-assistant', departmentId: 'd1', date: '2026-07-16', status: 'open', category: 'facility' },
-    { id: 'cmp3', title: 'Irregular attendance by student', description: 'Student Arjun Reddy (CSE-A Sem-5) has been irregular for the past two weeks, affecting group project progress.', filedBy: 'Dr. Arjun Nair', filedById: 's3', filedByRole: 'associate-professor', departmentId: 'd1', date: '2026-07-14', status: 'resolved', category: 'academic', against: 'Arjun Reddy', resolution: 'Student counseled and parents notified. Attendance improving.' },
-    { id: 'cmp4', title: 'Misuse of college facilities', description: 'Some students were found using the seminar hall after hours without permission.', filedBy: 'Suresh Kumar', filedById: 's10', filedByRole: 'office-superintendent', departmentId: 'd1', date: '2026-07-12', status: 'closed', category: 'student-discipline', against: 'Unknown students', resolution: 'Security tightened. Notice issued to all departments.' },
-  ],
-  nonTeachingTasks: [
-    { id: 'nt1', staffId: 's10', task: 'Prepare semester registration documents', departmentId: 'd1', status: 'completed', date: '2026-07-22' },
-    { id: 'nt2', staffId: 's10', task: 'Coordinate exam hall arrangements', departmentId: 'd1', status: 'in-progress', date: '2026-07-22' },
-    { id: 'nt3', staffId: 's11', task: 'Calibrate lab equipment for Sem-5 OS lab', departmentId: 'd1', status: 'pending', date: '2026-07-22' },
-    { id: 'nt4', staffId: 's11', task: 'Inventory check - Network Lab', departmentId: 'd1', status: 'completed', date: '2026-07-22' },
-    { id: 'nt5', staffId: 's10', task: 'Dispatch official letters to university', departmentId: 'd1', status: 'in-progress', date: '2026-07-22' },
-    { id: 'nt6', staffId: 's12', task: 'Maintain ECE lab oscilloscopes', departmentId: 'd2', status: 'completed', date: '2026-07-22' },
-    { id: 'nt7', staffId: 's12', task: 'Assist with Sem-3 circuit lab session', departmentId: 'd2', status: 'in-progress', date: '2026-07-22' },
-    { id: 'nt8', staffId: 's13', task: 'Service microcontroller kits', departmentId: 'd2', status: 'pending', date: '2026-07-22' },
-    { id: 'nt9', staffId: 's13', task: 'Stock lab consumables for ECE dept', departmentId: 'd2', status: 'completed', date: '2026-07-22' },
-    { id: 'nt10', staffId: 's17', task: 'Thermodynamics lab equipment setup', departmentId: 'd3', status: 'in-progress', date: '2026-07-22' },
-    { id: 'nt11', staffId: 's17', task: 'CAD lab software update', departmentId: 'd3', status: 'pending', date: '2026-07-22' },
-    { id: 'nt12', staffId: 's17', task: 'Workshop safety inspection', departmentId: 'd3', status: 'completed', date: '2026-07-22' },
-  ],
-  resources: [
-    // CSE Department resources
-    { id: 'res1', name: 'Classroom CS-101', category: 'classroom', departmentId: 'd1', location: 'Block A, 1st Floor', status: 'available', isLab: false, capacity: 60 },
-    { id: 'res2', name: 'Classroom CS-102', category: 'classroom', departmentId: 'd1', location: 'Block A, 1st Floor', status: 'available', isLab: false, capacity: 60 },
-    { id: 'res3', name: 'Classroom CS-201', category: 'classroom', departmentId: 'd1', location: 'Block A, 2nd Floor', status: 'in-use', isLab: false, capacity: 60 },
-    { id: 'res4', name: 'Classroom CS-301', category: 'classroom', departmentId: 'd1', location: 'Block A, 3rd Floor', status: 'available', isLab: false, capacity: 60 },
-    { id: 'res5', name: 'Projector - Epson EB-X41', category: 'projector', departmentId: 'd1', location: 'CS-101', status: 'available', isLab: false },
-    { id: 'res6', name: 'Projector - BenQ MH530', category: 'projector', departmentId: 'd1', location: 'CS-201', status: 'under-maintenance', isLab: false },
-    { id: 'res7', name: 'Smart Board - Samsung 75"', category: 'smart-board', departmentId: 'd1', location: 'CS-102', status: 'available', isLab: false },
-    { id: 'res8', name: 'Desktop PC - Dell OptiPlex', category: 'computer', departmentId: 'd1', location: 'Programming Lab - 1', status: 'available', isLab: true },
-    { id: 'res9', name: 'Desktop PC - HP ProDesk', category: 'computer', departmentId: 'd1', location: 'Cloud Computing Lab', status: 'in-use', isLab: true },
-    { id: 'res10', name: 'Furniture Set - Desks & Chairs', category: 'furniture', departmentId: 'd1', location: 'CS-101', status: 'available', isLab: false },
-    { id: 'res11', name: 'Teaching Equipment - Whiteboard Set', category: 'teaching-equipment', departmentId: 'd1', location: 'CS-102', status: 'available', isLab: false },
-    { id: 'res12', name: 'Reference Books - Algorithms Collection', category: 'book', departmentId: 'd1', location: 'Department Library', status: 'available', isLab: false },
-    { id: 'res13', name: 'Programming Lab - 1', category: 'other-equipment', departmentId: 'd1', location: 'Block B, Ground Floor', status: 'available', isLab: true, capacity: 60, equipment: [{ name: 'Desktop PC', qty: 60, status: 'available' }, { name: 'Projector', qty: 1, status: 'available' }, { name: 'Server', qty: 1, status: 'under-repair' }] },
-    { id: 'res14', name: 'Networking Lab', category: 'other-equipment', departmentId: 'd1', location: 'Block B, 1st Floor', status: 'available', isLab: true, capacity: 40, equipment: [{ name: 'Router', qty: 8, status: 'available' }, { name: 'Switch', qty: 12, status: 'available' }, { name: 'Crimping Tool', qty: 10, status: 'available' }] },
-    { id: 'res15', name: 'Cloud Computing Lab', category: 'other-equipment', departmentId: 'd1', location: 'Block B, 2nd Floor', status: 'in-use', isLab: true, capacity: 50, equipment: [{ name: 'Rack Server', qty: 2, status: 'available' }, { name: 'Workstation', qty: 50, status: 'available' }] },
-    // ECE Department resources
-    { id: 'res16', name: 'Classroom EC-101', category: 'classroom', departmentId: 'd2', location: 'Block C, 1st Floor', status: 'available', isLab: false, capacity: 30 },
-    { id: 'res17', name: 'Classroom EC-102', category: 'classroom', departmentId: 'd2', location: 'Block C, 1st Floor', status: 'available', isLab: false, capacity: 30 },
-    { id: 'res18', name: 'Oscilloscope - Tektronix TBS2000', category: 'teaching-equipment', departmentId: 'd2', location: 'VLSI Lab', status: 'available', isLab: true },
-    { id: 'res19', name: 'FPGA Kit - Xilinx Artix-7', category: 'teaching-equipment', departmentId: 'd2', location: 'VLSI Lab', status: 'available', isLab: true },
-    { id: 'res20', name: 'Signal Generator - Keysight', category: 'teaching-equipment', departmentId: 'd2', location: 'VLSI Lab', status: 'under-maintenance', isLab: true },
-    { id: 'res21', name: 'VLSI Lab', category: 'other-equipment', departmentId: 'd2', location: 'Block C, Ground Floor', status: 'available', isLab: true, capacity: 30, equipment: [{ name: 'Oscilloscope', qty: 15, status: 'available' }, { name: 'FPGA Kit', qty: 30, status: 'available' }, { name: 'Signal Generator', qty: 10, status: 'under-repair' }] },
-    { id: 'res22', name: 'Embedded Systems Lab', category: 'other-equipment', departmentId: 'd2', location: 'Block C, 1st Floor', status: 'available', isLab: true, capacity: 30, equipment: [{ name: 'Microcontroller Kit', qty: 30, status: 'available' }, { name: 'Arduino Board', qty: 40, status: 'available' }] },
-    // MECH Department resources
-    { id: 'res23', name: 'Classroom ME-101', category: 'classroom', departmentId: 'd3', location: 'Block D, 1st Floor', status: 'available', isLab: false, capacity: 45 },
-    { id: 'res24', name: 'Classroom ME-102', category: 'classroom', departmentId: 'd3', location: 'Block D, 1st Floor', status: 'available', isLab: false, capacity: 45 },
-    { id: 'res25', name: 'Heat Exchanger - Shell & Tube', category: 'teaching-equipment', departmentId: 'd3', location: 'Thermal Engineering Lab', status: 'available', isLab: true },
-    { id: 'res26', name: 'Wind Tunnel - Subsonic', category: 'teaching-equipment', departmentId: 'd3', location: 'Thermal Engineering Lab', status: 'available', isLab: true },
-    { id: 'res27', name: 'Thermal Engineering Lab', category: 'other-equipment', departmentId: 'd3', location: 'Block D, Ground Floor', status: 'available', isLab: true, capacity: 25, equipment: [{ name: 'Heat Exchanger', qty: 4, status: 'available' }, { name: 'Wind Tunnel', qty: 1, status: 'available' }, { name: 'Thermocouple', qty: 20, status: 'available' }] },
-    // MTH Department resources
-    { id: 'res28', name: 'Classroom MTH-101', category: 'classroom', departmentId: 'd4', location: 'Block E, 1st Floor', status: 'available', isLab: false, capacity: 60 },
-    { id: 'res29', name: 'Projector - ViewSonic', category: 'projector', departmentId: 'd4', location: 'MTH-101', status: 'available', isLab: false },
-    { id: 'res30', name: 'Reference Books - Mathematics Collection', category: 'book', departmentId: 'd4', location: 'Department Library', status: 'available', isLab: false },
-  ],
-  resourceAllocations: [
-    { id: 'ra1', resourceId: 'res3', allocatedTo: 's4', date: '2026-08-14', fromTime: '09:00', toTime: '11:00' },
-    { id: 'ra2', resourceId: 'res9', allocatedTo: 's5', date: '2026-08-14', fromTime: '10:00', toTime: '12:00' },
-    { id: 'ra3', resourceId: 'res15', allocatedTo: 's5', date: '2026-08-14', fromTime: '10:00', toTime: '12:00' },
-  ],
-  maintenanceRequests: [
-    { id: 'mr1', resourceId: 'res6', requestedBy: 's3', assignedTo: 's13', description: 'Projector lamp flickering, needs replacement', status: 'in-progress', progress: 50, date: '2026-08-12' },
-    { id: 'mr2', resourceId: 'res20', requestedBy: 's9', assignedTo: 's13', description: 'Signal generator output unstable, needs calibration', status: 'pending', progress: 0, date: '2026-08-13' },
-  ],
-  resourceRequests: [
-    { id: 'rr1', resourceName: 'New Projector for CS-301', category: 'projector', departmentId: 'd1', requestedBy: 's3', date: '2026-08-10', status: 'pending', notes: 'Current projector in CS-301 is outdated and frequently malfunctions' },
-    { id: 'rr2', resourceName: 'Additional Oscilloscopes', category: 'teaching-equipment', departmentId: 'd2', requestedBy: 's9', date: '2026-08-11', status: 'pending', notes: 'Need 5 more oscilloscopes for VLSI lab practical sessions' },
-  ],
-  resourceHistory: [
-    { id: 'rh1', resourceId: 'res3', action: 'allocated', date: '2026-08-14', staffId: 's4', details: 'Allocated to Dr. Priya Sharma for Advanced Algorithms class' },
-    { id: 'rh2', resourceId: 'res9', action: 'allocated', date: '2026-08-14', staffId: 's5', details: 'Allocated to Dr. Arjun Nair for Cloud Computing lab' },
-    { id: 'rh3', resourceId: 'res15', action: 'allocated', date: '2026-08-14', staffId: 's5', details: 'Allocated to Dr. Arjun Nair for Cloud Computing lab session' },
-    { id: 'rh4', resourceId: 'res6', action: 'maintenance', date: '2026-08-12', details: 'Maintenance request raised for projector lamp replacement' },
-    { id: 'rh5', resourceId: 'res20', action: 'maintenance', date: '2026-08-13', details: 'Maintenance request raised for signal generator calibration' },
-  ],
-  subjectAllocations: [
-    { id: 'al1', subjectId: 'sub1', departmentId: 'd1', semester: 6, academicYear: '2026–27', classIds: ['A', 'B'], facultyId: 's4', resourceIds: ['res1', 'res5'], requiredTypes: ['classroom', 'projector'], status: 'allocated', weeklyHours: 4, createdBy: 's3', createdAt: '2026-07-01', updatedAt: '2026-07-02' },
-    { id: 'al2', subjectId: 'sub2', departmentId: 'd1', semester: 6, academicYear: '2026–27', classIds: ['A'], facultyId: 's4', resourceIds: ['res2'], requiredTypes: ['classroom', 'projector'], status: 'allocated', weeklyHours: 4, createdBy: 's3', createdAt: '2026-07-03', updatedAt: '2026-07-03' },
-    { id: 'al3', subjectId: 'sub3', departmentId: 'd1', semester: 4, academicYear: '2026–27', classIds: ['A', 'B'], facultyId: 's5', resourceIds: ['res3'], requiredTypes: ['classroom', 'projector'], status: 'allocated', weeklyHours: 4, createdBy: 's3', createdAt: '2026-07-05', updatedAt: '2026-07-06' },
-    { id: 'al4', subjectId: 'sub4', departmentId: 'd1', semester: 4, academicYear: '2026–27', classIds: ['A'], facultyId: 's5', resourceIds: ['res15'], requiredTypes: ['classroom', 'projector'], status: 'allocated', weeklyHours: 4, createdBy: 's3', createdAt: '2026-07-07', updatedAt: '2026-07-08' },
-    { id: 'al5', subjectId: 'sub5', departmentId: 'd1', semester: 3, academicYear: '2026–27', classIds: ['A', 'B'], facultyId: 's6', resourceIds: ['res4', 'res5'], requiredTypes: ['classroom', 'projector'], status: 'allocated', weeklyHours: 4, createdBy: 's3', createdAt: '2026-07-10', updatedAt: '2026-07-12' },
-    { id: 'al6', subjectId: 'sub6', departmentId: 'd1', semester: 3, academicYear: '2026–27', classIds: ['A'], facultyId: 's6', resourceIds: [], requiredTypes: ['classroom', 'projector'], status: 'partially-allocated', weeklyHours: 4, createdBy: 's3', createdAt: '2026-07-14', updatedAt: '2026-07-14' },
-    { id: 'al7', subjectId: 'sub7', departmentId: 'd1', semester: 2, academicYear: '2026–27', classIds: ['A'], facultyId: 's7', resourceIds: ['res1', 'res7'], requiredTypes: ['classroom', 'projector'], status: 'allocated', weeklyHours: 3, createdBy: 's3', createdAt: '2026-07-16', updatedAt: '2026-07-16' },
-    { id: 'al8', subjectId: 'sub8', departmentId: 'd1', semester: 2, academicYear: '2026–27', classIds: ['B'], facultyId: null, resourceIds: [], requiredTypes: ['classroom', 'projector'], status: 'pending', weeklyHours: 3, createdBy: 's3', createdAt: '2026-07-18', updatedAt: '2026-07-18' },
-    { id: 'al9', subjectId: 'sub16', departmentId: 'd1', semester: 3, academicYear: '2026–27', classIds: ['A', 'B'], facultyId: 's8', resourceIds: ['res13'], requiredTypes: ['other-equipment', 'computer', 'projector'], status: 'conflict', weeklyHours: 3, createdBy: 's3', createdAt: '2026-07-20', updatedAt: '2026-07-20' },
-    { id: 'al10', subjectId: 'sub17', departmentId: 'd1', semester: 4, academicYear: '2026–27', classIds: ['A', 'B'], facultyId: null, resourceIds: [], requiredTypes: ['other-equipment', 'computer', 'projector'], status: 'pending', weeklyHours: 3, createdBy: 's3', createdAt: '2026-07-21', updatedAt: '2026-07-21' },
-    { id: 'al11', subjectId: 'sub18', departmentId: 'd1', semester: 3, academicYear: '2026–27', classIds: ['B'], facultyId: null, resourceIds: [], requiredTypes: ['other-equipment', 'computer', 'projector'], status: 'pending', weeklyHours: 3, createdBy: 's3', createdAt: '2026-07-22', updatedAt: '2026-07-22' },
-  ],
-  allocationHistory: [
-    { id: 'ah1', allocationId: 'al1', subjectId: 'sub1', date: '2026-07-01', changeType: 'created', previous: '', current: 'Faculty: Dr. Priya Sharma · Classes: 6A, 6B · Resources: Classroom CS-101, Projector - Epson EB-X41', changedBy: 's3' },
-    { id: 'ah2', allocationId: 'al1', subjectId: 'sub1', date: '2026-07-02', changeType: 'confirmed', previous: 'draft', current: 'allocated', changedBy: 's3', reason: 'Allocation reviewed and confirmed by HOD' },
-    { id: 'ah3', allocationId: 'al5', subjectId: 'sub5', date: '2026-07-10', changeType: 'created', previous: '', current: 'Faculty: Prof. Neha Verma · Classes: 3A, 3B · Resources: Classroom CS-301, Projector - Epson EB-X41', changedBy: 's3' },
-    { id: 'ah4', allocationId: 'al5', subjectId: 'sub5', date: '2026-07-12', changeType: 'confirmed', previous: 'draft', current: 'allocated', changedBy: 's3', reason: 'Allocation reviewed and confirmed by HOD' },
-    { id: 'ah5', allocationId: 'al6', subjectId: 'sub6', date: '2026-07-14', changeType: 'created', previous: '', current: 'Faculty: Prof. Neha Verma · Classes: 3A · Resources: —', changedBy: 's3' },
-    { id: 'ah6', allocationId: 'al3', subjectId: 'sub3', date: '2026-07-06', changeType: 'class-added', previous: '3A', current: '3A, 3B', changedBy: 's3', reason: 'Section 3B added to DBMS allocation' },
-    { id: 'ah7', allocationId: 'al9', subjectId: 'sub16', date: '2026-07-20', changeType: 'status-changed', previous: 'allocated', current: 'conflict', changedBy: 's3', reason: 'Faculty availability conflict flagged (faculty on leave)' },
-  ],
+  departments,
+  staff,
+  students,
+  subjects,
+  timetable,
+  approvals,
+  labs,
+  grievances: [],
+  committees: [],
+  publications: [],
+  researchProjects: [],
+  exams,
+  notifications: [],
+  scholars: [],
+  candidates,
+  messages: [],
+  policies: [],
+  examAttendance: [],
+  liaison: [],
+  rooms,
+  complaints: [],
+  nonTeachingTasks: [],
+  resources,
+  resourceAllocations: [],
+  maintenanceRequests: [],
+  resourceRequests: [],
+  resourceHistory: [],
+  subjectAllocations,
+  allocationHistory: [],
+  mentorAllocations,
+  mentoringHistory: [],
+  assignedTasks: [],
+  workloadSettings: {
+    dailyCapacity: 8,
+    thresholds: { low: 2, moderate: 4, high: 6 },
+    mentoringRule: { enabled: true, scheduleDay: 'Monday', studentsPerBatch: 20, hoursPerBatch: 1 },
+  },
 };

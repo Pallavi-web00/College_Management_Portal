@@ -20,7 +20,7 @@ import { staffName } from '../../store/StoreContext';
 export const ACADEMIC_YEAR = '2026–27';
 export const MAX_RECOMMENDED_HRS = 20;
 export const MAX_ALLOWED_HRS = 24;
-export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
+export const SEMESTERS = [1, 2, 3, 4, 5, 6];
 export const TEACHING_ROLES = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
 
 /* ---------- Labels ---------- */

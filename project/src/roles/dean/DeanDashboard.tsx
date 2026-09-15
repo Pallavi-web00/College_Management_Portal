@@ -3,13 +3,15 @@ import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
 import { Placeholder, LeaveManagementView } from '../../components/SharedViews';
-import { BarChart3, TrendingUp, Award, FileText, FlaskConical, Users2, CheckSquare, XCircle, Send, AlertTriangle, Download, FileCheck, BookOpen, ArrowLeft, CalendarDays } from 'lucide-react';
+import { CurriculumOversight } from './CurriculumOversight';
+import { BarChart3, TrendingUp, Award, FileText, FlaskConical, Users, Users2, CheckSquare, XCircle, Send, AlertTriangle, Download, FileCheck, BookOpen, ArrowLeft, CalendarDays } from 'lucide-react';
 import { useState } from 'react';
 import type { ApprovalRequest, Candidate, Staff } from '../../data/types';
 import { ExaminationReviewWorkspace } from '../exam/ExamWorkflow';
 
 export function DeanDashboard({ activeMenu }: { activeMenu: string }) {
 switch (activeMenu) {
+    case 'd-curriculum': return <CurriculumOversight />;
     case 'd-apply-leave': return <LeaveManagementView />;
     case 'd-exam-approvals': return <ExaminationReviewWorkspace reviewer="dean" />;
     case 'd-syllabus': return <SyllabusProgressFilter />;
@@ -17,6 +19,7 @@ switch (activeMenu) {
     case 'd-delay': return <DelayComparison />;
     case 'd-calendar': return <CalendarCompliance />;
     case 'd-remarks': return <RemarksReports />;
+    case 'd-faculty-recruitment': return <FacultyRecruitment />;
     case 'd-recruit': return <RecruitmentRequests />;
     case 'd-shortlist': return <ShortlistedCandidates />;
     case 'd-vacancy': return <VacancyWorkload />;
@@ -27,8 +30,7 @@ switch (activeMenu) {
     case 'd-results': return <ResultAnalysisFilter />;
     case 'd-accred': return <AccreditationReadiness />;
     case 'd-promo': return <PromotionRequests />;
-    case 'd-publications': return <PublicationsView />;
-    case 'd-projects': return <ProjectsView />;
+    case 'd-research': return <ResearchManagement />;
     case 'd-dept-reports': return <DeptReports />;
     case 'd-hod-mgmt': return <HodManagement />;
     default: return <DeanHome />;
@@ -347,8 +349,8 @@ function RemarksReports() {
   const [dept, setDept] = useState(data.departments[0]?.id ?? '');
   const [remark, setRemark] = useState('');
   const [savedRemarks, setSavedRemarks] = useState<{ id: string; dept: string; text: string; date: string }[]>([
-    { id: 'rm1', dept: 'd1', text: 'CSE department syllabus progress is satisfactory. Focus on Distributed Systems completion.', date: '2026-07-15' },
-    { id: 'rm2', dept: 'd2', text: 'ECE needs attention on Microprocessors — behind schedule. Please arrange remedial classes.', date: '2026-07-12' },
+    { id: 'rm1', dept: 'd1', text: 'BCA department syllabus progress is satisfactory. Focus on Data Structures completion.', date: '2026-07-15' },
+    { id: 'rm2', dept: 'd2', text: 'B.Com. needs attention on Corporate Accounting — behind schedule. Please arrange remedial classes.', date: '2026-07-12' },
   ]);
 
   const submit = () => {
@@ -409,6 +411,64 @@ function RemarksReports() {
           ]}
         />
       </div>
+    </div>
+  );
+}
+
+function FacultyRecruitment() {
+  const [activeTab, setActiveTab] = useState<'shortlist' | 'promotion'>('shortlist');
+  const [showHrPanel, setShowHrPanel] = useState(false);
+
+  const tabs = [
+    { id: 'shortlist', label: 'Shortlisted Candidates', icon: Users },
+    { id: 'promotion', label: 'Promotion Request', icon: TrendingUp },
+  ] as const;
+
+  return (
+    <div>
+      <PageHeader
+        title="Faculty Recruitment"
+        description="Shortlisted candidates, promotion requests, and HR recruitment requests in one place"
+        action={
+          <button className="btn-primary" onClick={() => setShowHrPanel(true)}>
+            <Send className="w-4 h-4" /> Send HR Request
+          </button>
+        }
+      />
+      <div className="card inline-flex items-center gap-1 p-1 mb-6">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <tab.icon className="w-4 h-4" /> {tab.label}
+          </button>
+        ))}
+      </div>
+      {activeTab === 'shortlist' ? <ShortlistedCandidates /> : <PromotionRequests />}
+      {showHrPanel && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowHrPanel(false)} />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-4xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Faculty Recruitment</p>
+              <button
+                type="button"
+                onClick={() => setShowHrPanel(false)}
+                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
+                aria-label="Close send HR request panel"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              <RecruitmentRequests />
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }
@@ -601,6 +661,7 @@ function ShortlistedCandidates() {
                     <div key={candidate.id} className="card p-3 border border-slate-200 rounded-xl">
                       <p className="font-medium text-slate-900">{candidate.name}</p>
                       <p className="text-xs text-slate-500">{candidate.qualification} · {candidate.experience}</p>
+                      {selected?.shortlistedCandidateNotes?.[candidate.id] && <p className="text-sm text-slate-700 mt-2"><span className="font-medium">HOD note:</span> {selected.shortlistedCandidateNotes[candidate.id]}</p>}
                       <p className="text-sm text-slate-700 mt-2">{candidate.interviewNotes || 'Profile ready for Principal review.'}</p>
                     </div>
                   ))}
@@ -1047,6 +1108,39 @@ function PromotionRequests() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* Research Management — main menu hosting the sub-pages as tabs */
+const RESEARCH_TABS = [
+  { id: 'publications', label: 'Publications', icon: FileText },
+  { id: 'projects', label: 'Funded Research Projects', icon: FlaskConical },
+] as const;
+
+function ResearchManagement() {
+  const [tab, setTab] = useState<(typeof RESEARCH_TABS)[number]['id']>('publications');
+
+  return (
+    <div>
+      <PageHeader title="Research Management" description="Faculty publications and funded research projects across departments" />
+      <div className="border-b border-slate-200 mb-6 flex gap-1 overflow-x-auto" role="tablist" aria-label="Research Management">
+        {RESEARCH_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === id ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'publications' && <PublicationsView />}
+      {tab === 'projects' && <ProjectsView />}
     </div>
   );
 }

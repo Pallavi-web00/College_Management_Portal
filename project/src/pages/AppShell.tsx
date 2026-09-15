@@ -24,14 +24,12 @@ export function AppShell() {
   );
 
   // default active menu = first item
-  const currentActive = activeMenu || userMenus[0]?.items[0]?.id || '';
+  const currentActive = activeMenu || userMenus[0]?.id || '';
 
   const userNotifs = notifications.filter((n) => currentUser && n.audience.includes(currentUser.role) && (!n.targetUserIds || n.targetUserIds.includes(currentUser.id)));
   const unreadCount = userNotifs.filter((n) => !n.read).length;
 
   if (!currentUser) return null;
-
-  const dept = data.departments.find((d) => d.id === currentUser.departmentId);
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -48,30 +46,25 @@ export function AppShell() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-          {userMenus.map((g) => (
-            <div key={g.group}>
-              <p className="px-3 mb-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{g.group}</p>
-              <div className="space-y-0.5">
-                {g.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = currentActive === item.id;
+          <div className="space-y-0.5">
+            {userMenus.map((item) => {
+              const Icon = item.icon;
+              const active = currentActive === item.id;
 
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => { setActiveMenu(item.id); setIsSidebarOpen(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                        active ? 'bg-white/10 text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => { setActiveMenu(item.id); setIsSidebarOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    active ? 'bg-white/10 text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         <div className="p-3 border-t border-slate-800">
@@ -104,7 +97,7 @@ export function AppShell() {
               <div className="hidden sm:block">
                 <p className="text-xs text-slate-500">{deptName(data, currentUser.departmentId)}</p>
                 <p className="text-sm font-semibold text-slate-900">
-                  {userMenus.flatMap((g) => g.items).find((i) => i.id === currentActive)?.label ?? 'Dashboard'}
+                  {userMenus.find((i) => i.id === currentActive)?.label ?? 'Dashboard'}
                 </p>
               </div>
             </div>
@@ -134,7 +127,7 @@ export function AppShell() {
                         ) : userNotifs.map((n) => (
                           <button
                             key={n.id}
-                            onClick={() => { markNotificationRead(n.id); if (n.title === 'Final Examination Schedule Published' && currentUser.role === 'hod') { setActiveMenu('h-examination-management'); setIsSidebarOpen(false); } setNotifOpen(false); }}
+                            onClick={() => { markNotificationRead(n.id); if (n.title === 'Final Examination Schedule Published' && currentUser.role === 'hod') { setActiveMenu('h-academic-management'); setIsSidebarOpen(false); } setNotifOpen(false); }}
                             className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 ${!n.read ? 'bg-blue-50/50' : ''}`}
                           >
                             <p className="text-sm font-medium text-slate-900">{n.title}</p>

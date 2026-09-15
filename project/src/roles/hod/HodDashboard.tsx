@@ -6,84 +6,470 @@ import { StudentsDirectory, StaffDirectory, GrievancesPanel, SyllabusProgressVie
 import { ResourceManagement } from '../../components/ResourceViews';
 import { TimetableWorkspace } from './TimetableWorkspace';
 import { SubjectAllocationWorkspace } from './SubjectAllocationWorkspace';
+import { MentoringWorkspace } from './MentoringWorkspace';
+import { WorkloadWorkspace } from './WorkloadWorkspace';
 import { AssessmentMarksWorkspace, ExaminationManagementWorkspace } from '../exam/ExamWorkflow';
-import { Building2, Users, Beaker, GraduationCap, ClipboardCheck, TrendingUp, FileText, Calendar, Award, AlertTriangle, Clock, CheckSquare, Send, Plus, XCircle, ArrowLeft, RotateCcw, ListChecks } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import type { Student, Staff, TimetableEntry, Candidate, ApprovalRequest } from '../../data/types';
+import { Building2, Users, Beaker, Wrench, GraduationCap, ClipboardCheck, TrendingUp, FileText, Calendar, CalendarDays, BarChart3, Award, AlertTriangle, Clock, CheckSquare, Send, Plus, XCircle, ArrowLeft, RotateCcw, ListChecks, Search, UserRoundCheck, BookOpen, Briefcase, Mail, Phone, MapPin, Eye, ArrowRightLeft } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { Student, Staff, TimetableEntry, Candidate, ApprovalRequest, AssignedTask, MentorAllocation } from '../../data/types';
 import { StudentDetailModal } from '../../components/DetailModals';
 import { FacultyPerformanceModal } from './FacultyPerformanceModal';
+import { facultyTeachingEffectiveness, teTrend } from './teachingEffectiveness';
+import { addDays, computeFacultyDailyWorkload, dayName, formatDayLabel, formatFullDate, formatIso, isoDate, TASK_PRIORITY_STYLES, WORK_CATEGORY_LABELS } from './workloadLogic';
+import { ACTIVE_ACADEMIC_YEAR, MENTOR_CAPACITY, getAllocationForStudent, getMenteesOfMentor, getMentorPool, loadStateFor, mentoringClassLabel, todayISO, uid } from './mentoringLogic';
 
 const TEACHING_ROLES = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
 const LUNCH_SLOTS = ['13:00-14:00'];
 const MAX_WEEKLY_HOURS = 44;
 const MAX_CONTINUOUS = 4;
 
+function ChartTooltip({ title, children, className = '' }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <div role="tooltip" className={`hod-chart-tooltip ${className}`}>
+      <p className="text-xs font-semibold text-slate-900">{title}</p>
+      {children}
+    </div>
+  );
+}
+
 export function HodDashboard({ activeMenu, onNavigate }: { activeMenu: string; onNavigate?: (id: string) => void }) {
-  const { currentUser } = useStore();
-  const deptId = currentUser?.departmentId ?? '';
+  const { currentUser, data } = useStore();
+  // Resolve the department from the HOD mapping as a fallback. This keeps the
+  // dashboard renderable even when an older/stale user record has no departmentId.
+  const deptId = currentUser?.departmentId
+    || data.departments.find((department) => department.hodId === currentUser?.id)?.id
+    || '';
 
 switch (activeMenu) {
-    case 'h-apply-leave': return <LeaveManagementView />;
-    case 'h-dept-mgmt': return <DepartmentManagement deptId={deptId} />;
-    case 'h-faculty-mgmt': return <FacultyManagement deptId={deptId} onNavigate={onNavigate} />;
-    case 'h-student-mgmt': return <StudentManagement deptId={deptId} />;
+    case 'h-dashboard':
+      return <HodHome deptId={deptId} onNavigate={onNavigate} />;
+    case 'h-academic-management':
     case 'h-tt-create':
     case 'h-tt-lab':
     case 'h-tt-conflict':
     case 'h-tt-publish':
-      return <TimetableWorkspace deptId={deptId} />;
-    case 'h-subject-alloc':
-      return <SubjectAllocationWorkspace deptId={deptId} />;
-    case 'h-recruit': return <RecruitmentShortlist deptId={deptId} />;
-    case 'h-examination-management': return <ExaminationManagementWorkspace deptId={deptId} />;
-    case 'h-assessment-marks': return <AssessmentMarksWorkspace deptId={deptId} />;
+    case 'h-examination-management':
+    case 'h-assessment-marks':
+    case 'h-results':
+      return <AcademicManagement deptId={deptId} />;
+    case 'h-apply-leave': return <LeaveManagementView />;
+    case 'h-dept-mgmt': return <DepartmentManagement deptId={deptId} />;
+    case 'h-faculty-mgmt': return <FacultyManagement deptId={deptId} onNavigate={onNavigate} />;
+    case 'h-faculty':
+    case 'h-subject-alloc': return <FacultyWorkspace deptId={deptId} />;
+    case 'h-student-mgmt': return <StudentManagement deptId={deptId} />;
+    case 'h-resource-management': return <ResourceManagementWorkspace deptId={deptId} />;
     case 'h-syllabus': return <SyllabusTracking deptId={deptId} />;
     case 'h-extra': return <ExtraClasses deptId={deptId} />;
-    case 'h-results': return <ResultAnalysis deptId={deptId} />;
-    default: return <HodHome deptId={deptId} />;
+    default: return <HodHome deptId={deptId} onNavigate={onNavigate} />;
   }
 }
 
-function HodHome({ deptId }: { deptId: string }) {
+const ACADEMIC_TABS = [
+  { id: 'timetable', label: 'Timetable Management', icon: Calendar },
+  { id: 'examination', label: 'Examination Management', icon: CalendarDays },
+  { id: 'results', label: 'Result Analysis', icon: BarChart3 },
+] as const;
+
+const RESOURCE_TABS = [
+  { id: 'resources', label: 'Resource Management', icon: Wrench },
+  { id: 'labs', label: 'Lab Management', icon: Beaker },
+] as const;
+
+function ResourceManagementWorkspace({ deptId }: { deptId: string }) {
+  const [tab, setTab] = useState<(typeof RESOURCE_TABS)[number]['id']>('resources');
+
+  return (
+    <div>
+      <PageHeader title="Resource Management" description="Coordinate department resources and laboratory operations." />
+      <div className="border-b border-slate-200 mb-6 flex gap-1 overflow-x-auto" role="tablist" aria-label="Resource Management">
+        {RESOURCE_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === id ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'resources' && <ResourceManagement deptId={deptId} />}
+      {tab === 'labs' && <LabMgmt deptId={deptId} />}
+    </div>
+  );
+}
+
+function AcademicManagement({ deptId }: { deptId: string }) {
+  const [tab, setTab] = useState<(typeof ACADEMIC_TABS)[number]['id']>('timetable');
+
+  return (
+    <div>
+      <PageHeader title="Academic Management" description="Coordinate timetable, examinations and department results." />
+      <div className="border-b border-slate-200 mb-6 flex gap-1 overflow-x-auto" role="tablist" aria-label="Academic Management">
+        {ACADEMIC_TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === id ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === 'timetable' && <TimetableWorkspace deptId={deptId} />}
+      {tab === 'examination' && (
+        <>
+          <ExaminationManagementWorkspace deptId={deptId} />
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <AssessmentMarksWorkspace deptId={deptId} />
+          </div>
+        </>
+      )}
+      {tab === 'results' && <ResultAnalysis deptId={deptId} />}
+    </div>
+  );
+}
+
+function HodHome({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: string) => void }) {
   const { data } = useStore();
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const dept = data.departments.find((d) => d.id === deptId);
   const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
   const students = data.students.filter((s) => s.departmentId === deptId);
-  const subs = data.subjects.filter((s) => s.departmentId === deptId);
-  const avgSyllabus = subs.length ? Math.round(subs.reduce((a, s) => a + s.syllabusCompletion, 0) / subs.length) : 0;
+  const subjects = data.subjects.filter((s) => s.departmentId === deptId);
+  const exams = data.exams.filter((e) => e.departmentId === deptId);
+  const timetable = data.timetable.filter((entry) => entry.departmentId === deptId);
+
+  const totalStudents = students.length;
+  const facultyStrength = faculty.length;
+  const studentAttendance = students.length ? Math.round(students.reduce((sum, student) => sum + student.attendancePct, 0) / students.length) : 0;
+  const facultyAttendance = faculty.length ? Math.round(faculty.reduce((sum, member) => sum + member.attendancePct, 0) / faculty.length) : 0;
+  const averageSyllabus = subjects.length ? Math.round(subjects.reduce((sum, subject) => sum + subject.syllabusCompletion, 0) / subjects.length) : 0;
+  const currentPass = 91;
+  const previousPass = 86;
+  const improvement = currentPass - previousPass;
+
+  const academicChart = [
+    { semester: 'Semester I', pass: 88, avgMarks: 76, distinction: 32, failure: 7, backlogs: 12 },
+    { semester: 'Semester II', pass: 90, avgMarks: 77, distinction: 36, failure: 6, backlogs: 10 },
+    { semester: 'Semester III', pass: 85, avgMarks: 74, distinction: 30, failure: 9, backlogs: 16 },
+    { semester: 'Semester IV', pass: 92, avgMarks: 79, distinction: 41, failure: 5, backlogs: 9 },
+    { semester: 'Semester V', pass: 91, avgMarks: 78, distinction: 42, failure: 8, backlogs: 15 },
+    { semester: 'Semester VI', pass: 94, avgMarks: 81, distinction: 46, failure: 4, backlogs: 8 },
+  ];
+
+  const syllabusProgress = [
+    { semester: 'Semester I', completion: 82, subjects: { 'Data Structures': 85, 'Algorithms': 80, 'Maths': 78, 'DBMS': 82 } },
+    { semester: 'Semester II', completion: 87, subjects: { 'Python': 91, 'OS': 86, 'Networks': 82, 'Web': 89 } },
+    { semester: 'Semester III', completion: 76, subjects: { 'OOP': 80, 'Compiler': 76, 'DLD': 73, 'Discrete': 74 } },
+    { semester: 'Semester IV', completion: 91, subjects: { 'DBMS': 95, 'Cloud': 89, 'Java': 90, 'AI': 87 } },
+    { semester: 'Semester V', completion: 68, subjects: { 'DBMS': 82, 'Machine Learning': 74, 'Mathematics': 65, 'Python': 81, 'Computer Networks': 39 } },
+    { semester: 'Semester IV', completion: 85, subjects: { 'Mathematics for Computer Applications': 90, 'Software Engineering': 84, 'Web Technologies': 88, 'Computer Networks': 80 } },
+  ];
+
+  const facultyPerformance = faculty.slice(0, 5).map((member, index) => ({
+    name: member.name,
+    performance: [92, 88, 84, 76, 65][index] ?? 72,
+    attendance: member.attendancePct,
+    feedback: member.feedbackScore,
+  }));
+
+  const upcomingExams = exams
+    .filter((exam) => new Date(exam.date).getTime() >= new Date(new Date().setHours(0, 0, 0, 0)).getTime())
+    .slice(0, 3)
+    .map((exam) => ({
+      id: exam.id,
+      date: new Date(exam.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      examName: exam.examName,
+      subject: exam.subject,
+      semester: exam.semester,
+    }));
+
+  const atRiskStudents = students
+    .filter((student) => student.attendancePct < 75 || student.gpa < 6 || student.backlogs > 1)
+    .slice(0, 4)
+    .map((student) => ({
+      id: student.id,
+      name: student.name,
+      section: `${student.program} ${student.semester}`,
+      riskLevel: student.attendancePct < 70 || student.backlogs > 2 ? 'High' : 'Medium',
+      indicators: [
+        student.attendancePct < 75 ? `Low Attendance — ${student.attendancePct}%` : null,
+        student.gpa < 6 ? `Poor Academic Performance — ${student.gpa}` : null,
+        student.backlogs > 1 ? `Multiple Backlogs — ${student.backlogs}` : null,
+      ].filter(Boolean) as string[],
+    }));
+
+  const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const todayTimetable = timetable.filter((entry) => entry.day === currentDay).sort((a, b) => a.slot.localeCompare(b.slot));
+
+  const currentSlotActive = (slot: string) => {
+    const match = slot.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+    if (!match) return false;
+    const [, startHour, startMinute, endHour, endMinute] = match;
+    const startMinutes = Number(startHour) * 60 + Number(startMinute);
+    const endMinutes = Number(endHour) * 60 + Number(endMinute);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  };
+
+  const getSyllabusTone = (value: number) => {
+    if (value >= 85) return 'bg-emerald-500';
+    if (value >= 70) return 'bg-amber-500';
+    return 'bg-rose-500';
+  };
+
   return (
     <div>
-      <PageHeader title={`${dept?.name} — HOD Dashboard`} description="Department oversight" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Faculty" value={faculty.length} icon={<Users className="w-5 h-5" />} accent="blue" />
-        <StatCard label="Students" value={students.length} icon={<GraduationCap className="w-5 h-5" />} accent="indigo" />
-        <StatCard label="Subjects" value={subs.length} icon={<FileText className="w-5 h-5" />} accent="emerald" />
-        <StatCard label="Avg Syllabus" value={`${avgSyllabus}%`} icon={<TrendingUp className="w-5 h-5" />} accent={avgSyllabus < 75 ? 'amber' : 'emerald'} />
+      <PageHeader title="HOD Dashboard" description="Academic Year: 2026–27 • Odd Semester" />
+
+      <div className="grid grid-cols-2 xl:grid-cols-7 gap-3 mb-5">
+        <StatCard label="Total Students" value={totalStudents} icon={<GraduationCap className="w-4 h-4" />} accent="indigo" compact />
+        <StatCard label="Faculty Strength" value={facultyStrength} icon={<Users className="w-4 h-4" />} accent="blue" compact />
+        <StatCard
+          label="Average Attendance"
+          value={
+            <div className="text-[11px] font-semibold text-slate-700 leading-4">
+              <div>Students: {studentAttendance}%</div>
+              <div>Faculty: {facultyAttendance}%</div>
+            </div>
+          }
+          icon={<UserRoundCheck className="w-4 h-4" />}
+          accent="emerald"
+          compact
+        />
+        <StatCard label="Syllabus Completion" value={`${averageSyllabus}%`} icon={<BookOpen className="w-4 h-4" />} accent={averageSyllabus >= 75 ? 'emerald' : 'amber'} compact />
+        <StatCard label="Pass Percentage" value={`${currentPass}%`} icon={<TrendingUp className="w-4 h-4" />} accent="blue" compact />
+        <StatCard label="At-Risk Students" value={atRiskStudents.length} icon={<AlertTriangle className="w-4 h-4" />} accent={atRiskStudents.length ? 'amber' : 'slate'} compact />
+        <StatCard label="Upcoming Exams" value={upcomingExams.length} icon={<CalendarDays className="w-4 h-4" />} accent="slate" compact />
       </div>
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Faculty Status</h3>
+
+      <div className="grid xl:grid-cols-2 gap-4 mb-4">
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900">Academic Performance</h3>
+            <span className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Semesters</span>
+          </div>
+
+          <div className="group/chart flex items-end gap-2 h-28">
+            {academicChart.map((entry) => (
+              <div key={entry.semester} className="group/bar relative flex-1 flex flex-col items-center gap-1.5">
+                <ChartTooltip title={entry.semester} className={`bottom-full left-1/2 mb-2 -translate-x-1/2 ${entry.semester === 'Semester I' ? 'left-0 translate-x-0' : entry.semester === 'Semester VI' ? 'left-auto right-0 translate-x-0' : ''}`}>
+                  <div className="mt-1 border-b border-slate-100 pb-1.5 text-sm font-semibold text-slate-900">{entry.pass}% <span className="text-[10px] font-medium text-slate-500">Pass Percentage</span></div>
+                  <dl className="mt-1.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+                    <dt>Average Marks</dt><dd className="font-medium text-slate-800">{entry.avgMarks}%</dd>
+                    <dt>Distinction Students</dt><dd className="font-medium text-slate-800">{entry.distinction}</dd>
+                    <dt>Failure Students</dt><dd className="font-medium text-slate-800">{entry.failure}</dd>
+                    <dt>Backlog Students</dt><dd className="font-medium text-slate-800">{entry.backlogs}</dd>
+                  </dl>
+                </ChartTooltip>
+                <div className="w-full flex justify-center items-end h-20">
+                  <div
+                    className={`w-full rounded-t-md transition-[opacity,filter] duration-150 group-hover/chart:opacity-60 group-hover/bar:opacity-100 group-hover/bar:brightness-105 group-hover/bar:ring-1 group-hover/bar:ring-slate-300 ${entry.pass >= 90 ? 'bg-emerald-500' : entry.pass >= 80 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                    style={{ height: `${Math.max(18, entry.pass)}%` }}
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500">{entry.semester.split(' ')[1]}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <span>Current Pass: <strong className="text-slate-900">{currentPass}%</strong></span>
+            <span>Previous: <strong className="text-slate-900">{previousPass}%</strong></span>
+            <span className={improvement >= 0 ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold'}>
+              {improvement >= 0 ? '+' : ''}{improvement}%
+            </span>
+          </div>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900">Syllabus Completion</h3>
+            <span className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Progress</span>
+          </div>
+          <div className="group/chart space-y-2.5">
+            {syllabusProgress.map((entry) => (
+              <div key={entry.semester} className="group/bar relative">
+                <ChartTooltip title={entry.semester} className="bottom-full right-0 mb-2 w-52">
+                  <div className="mt-1 border-b border-slate-100 pb-1.5 text-sm font-semibold text-slate-900">{entry.completion}% <span className="text-[10px] font-medium text-slate-500">Overall Completion</span></div>
+                  <dl className="mt-1.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+                    {Object.entries(entry.subjects).map(([subject, value]) => (
+                      <Fragment key={subject}>
+                        <dt>{subject}</dt><dd className={value < 50 ? 'font-semibold text-rose-600' : 'font-medium text-slate-800'}>{value}%</dd>
+                      </Fragment>
+                    ))}
+                  </dl>
+                </ChartTooltip>
+                <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1">
+                  <span>{entry.semester}</span>
+                  <span className="font-medium text-slate-700">{entry.completion}%</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className={`h-full rounded-full transition-[opacity,filter] duration-150 group-hover/chart:opacity-60 group-hover/bar:opacity-100 group-hover/bar:brightness-105 ${getSyllabusTone(entry.completion)}`} style={{ width: `${entry.completion}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid xl:grid-cols-2 gap-4 mb-4">
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900">Faculty Performance</h3>
+            <button
+              type="button"
+              onClick={() => onNavigate?.('h-faculty')}
+              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              View Faculty Performance <ArrowRightLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="group/chart space-y-2.5">
+            {facultyPerformance.map((facultyMember) => (
+              <div key={facultyMember.name} className="group/bar relative">
+                <ChartTooltip title={facultyMember.name} className="bottom-full right-0 mb-2 w-48">
+                  <div className="mt-1 border-b border-slate-100 pb-1.5 text-sm font-semibold text-slate-900">{facultyMember.performance}% <span className="text-[10px] font-medium text-slate-500">Overall Performance</span></div>
+                  <dl className="mt-1.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+                    <dt>Attendance</dt><dd className="font-medium text-slate-800">{facultyMember.attendance}%</dd>
+                    <dt>Feedback Score</dt><dd className="font-medium text-slate-800">{facultyMember.feedback}/5</dd>
+                  </dl>
+                </ChartTooltip>
+                <div className="flex items-center justify-between text-[11px] text-slate-600 mb-1">
+                  <span className="truncate pr-2">{facultyMember.name}</span>
+                  <span className="font-medium text-slate-700">{facultyMember.performance}%</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-500 transition-[opacity,filter] duration-150 group-hover/chart:opacity-60 group-hover/bar:opacity-100 group-hover/bar:brightness-105" style={{ width: `${facultyMember.performance}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900">Examination Overview</h3>
+            <span className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Status</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Upcoming Exams</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">{upcomingExams.length}</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Completed</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">12</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Marks Pending</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">4</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Attendance Pending</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">1</p>
+            </div>
+          </div>
+
           <div className="space-y-2">
-            {faculty.map((f) => (
-              <div key={f.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
-                <div><p className="text-sm font-medium text-slate-900">{f.name}</p><p className="text-xs text-slate-500">{f.designation}</p></div>
-                <StatusBadge status={f.status} />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Subject Progress</h3>
-          <div className="space-y-3">
-            {subs.map((s) => (
-              <div key={s.id}>
-                <div className="flex justify-between text-sm mb-1"><span className="font-medium text-slate-900">{s.name}</span><span className="text-slate-600">{s.syllabusCompletion}%</span></div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${s.syllabusCompletion < 70 ? 'bg-rose-500' : s.syllabusCompletion < 85 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${s.syllabusCompletion}%` }} /></div>
-              </div>
+            {upcomingExams.map((exam) => (
+              <button
+                key={exam.id}
+                type="button"
+                className="w-full text-left rounded-md border border-slate-200 bg-white px-2.5 py-2 transition hover:border-blue-200 hover:bg-blue-50"
+                onClick={() => onNavigate?.('h-academic-management')}
+              >
+                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <span>{exam.date}</span>
+                  <span className="font-medium text-slate-700">Sem {exam.semester}</span>
+                </div>
+                <div className="mt-1 text-sm font-medium text-slate-900">{exam.examName}</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">{exam.subject}</div>
+              </button>
             ))}
           </div>
         </div>
       </div>
+
+      <div className="grid xl:grid-cols-2 gap-4 mb-4">
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900">At-Risk Students</h3>
+            <span className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Attention</span>
+          </div>
+          <div className="space-y-2">
+            {atRiskStudents.map((student) => (
+              <button
+                key={student.id}
+                type="button"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition hover:border-amber-200 hover:bg-amber-50"
+                title={student.indicators.map((indicator) => `${indicator}`).join('\n')}
+                onDoubleClick={() => setSelectedStudent(students.find((entry) => entry.id === student.id) ?? null)}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-900">{student.name}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${student.riskLevel === 'High' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {student.riskLevel}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-500">{student.section}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900">Today&apos;s Timetable</h3>
+            <span className="text-[11px] uppercase tracking-[0.08em] text-slate-400">{currentDay}</span>
+          </div>
+
+          <div className="space-y-2">
+            {todayTimetable.length > 0 ? todayTimetable.map((entry) => {
+              const isActive = currentSlotActive(entry.slot);
+              return (
+                <div
+                  key={`${entry.id}-${entry.day}`}
+                  className={`grid grid-cols-[72px_1fr_1fr_1fr_72px] items-center gap-2 rounded-md border px-2 py-2 text-[11px] ${isActive ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}
+                >
+                  <span className="font-medium">{entry.slot}</span>
+                  <span className="font-medium text-slate-900">{entry.section ? `${entry.section} ${entry.semester}` : `Sem ${entry.semester}`}</span>
+                  <span>{entry.subject}</span>
+                  <span>{data.staff.find((member) => member.id === entry.facultyId)?.name ?? 'Faculty'}</span>
+                  <span>{entry.room}</span>
+                </div>
+              );
+            }) : (
+              <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">No classes scheduled for today.</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {selectedStudent && (
+        <StudentDetailModal
+          student={selectedStudent}
+          open={Boolean(selectedStudent)}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
     </div>
   );
 }
@@ -92,8 +478,6 @@ function HodHome({ deptId }: { deptId: string }) {
 const DEPT_TABS: TabDef[] = [
   { id: 'dept-info', label: 'Department Information' },
   { id: 'faculty-list', label: 'Faculty List' },
-  { id: 'labs', label: 'Laboratory Management' },
-  { id: 'resources', label: 'Resources' },
 ];
 
 function DepartmentManagement({ deptId }: { deptId: string }) {
@@ -102,9 +486,7 @@ function DepartmentManagement({ deptId }: { deptId: string }) {
     <div>
       <Tabs tabs={DEPT_TABS} active={tab} onChange={setTab} />
       {tab === 'dept-info' && <DeptInfo deptId={deptId} />}
-      {tab === 'faculty-list' && <StaffDirectory scopeDept={deptId} roles={TEACHING_ROLES} title="Department Faculty" />}
-      {tab === 'labs' && <LabMgmt deptId={deptId} />}
-      {tab === 'resources' && <ResourceManagement deptId={deptId} />}
+      {tab === 'faculty-list' && <StaffDirectory scopeDept={deptId} roles={TEACHING_ROLES} title="Faculty List" />}
     </div>
   );
 }
@@ -173,6 +555,9 @@ function RecruitmentShortlist({ deptId }: { deptId: string }) {
   const { data, updateApproval, addNotification } = useStore();
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+  const [candidateNotes, setCandidateNotes] = useState<Record<string, string>>({});
+  const [noteCandidate, setNoteCandidate] = useState<Candidate | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
 
   const requests = data.approvals.filter(
     (a) => a.type === 'recruitment' && a.submittedByRole === 'dean' && a.departmentId === deptId && a.status === 'pending'
@@ -180,14 +565,29 @@ function RecruitmentShortlist({ deptId }: { deptId: string }) {
   const candidates = data.candidates.filter((c) => c.departmentId === deptId);
 
   const toggleCandidate = (id: string) => {
-    setSelectedCandidates((prev) =>
-      prev.includes(id) ? prev.filter((cid) => cid !== id) : [...prev, id]
-    );
+    if (selectedCandidates.includes(id)) {
+      setSelectedCandidates((prev) => prev.filter((cid) => cid !== id));
+      setCandidateNotes((prev) => { const next = { ...prev }; delete next[id]; return next; });
+      return;
+    }
+    const candidate = candidates.find((item) => item.id === id);
+    if (candidate) {
+      setNoteCandidate(candidate);
+      setNoteDraft(candidateNotes[id] ?? '');
+    }
+  };
+
+  const saveCandidateNote = () => {
+    if (!noteCandidate || !noteDraft.trim()) return;
+    setSelectedCandidates((prev) => prev.includes(noteCandidate.id) ? prev : [...prev, noteCandidate.id]);
+    setCandidateNotes((prev) => ({ ...prev, [noteCandidate.id]: noteDraft.trim() }));
+    setNoteCandidate(null);
+    setNoteDraft('');
   };
 
   const submitShortlist = () => {
     if (!selectedRequest) return;
-    updateApproval(selectedRequest.id, { shortlistedCandidateIds: selectedCandidates });
+    updateApproval(selectedRequest.id, { shortlistedCandidateIds: selectedCandidates, shortlistedCandidateNotes: candidateNotes });
     addNotification({
       id: `n${Date.now()}`,
       title: 'Candidate shortlist submitted',
@@ -215,6 +615,7 @@ function RecruitmentShortlist({ deptId }: { deptId: string }) {
                 onClick={() => {
                   setSelectedRequest(request);
                   setSelectedCandidates(request.shortlistedCandidateIds ?? []);
+                  setCandidateNotes(request.shortlistedCandidateNotes ?? {});
                 }}
                 className={`w-full text-left p-3 rounded-xl border ${selectedRequest?.id === request.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'} hover:border-blue-400 transition`}
               >
@@ -262,7 +663,7 @@ function RecruitmentShortlist({ deptId }: { deptId: string }) {
                   {candidates.length === 0 && <p className="text-sm text-slate-400">No candidates available for your department.</p>}
                 </div>
               </div>
-              <button className="btn-primary" onClick={submitShortlist} disabled={!selectedCandidates.length}>
+              <button className="btn-primary" onClick={submitShortlist} disabled={!selectedCandidates.length || selectedCandidates.some((id) => !candidateNotes[id]?.trim())}>
                 Forward shortlist to Dean
               </button>
             </>
@@ -270,56 +671,1100 @@ function RecruitmentShortlist({ deptId }: { deptId: string }) {
             <div className="text-sm text-slate-500">Select a recruitment request to shortlist candidates and forward the selected profiles to the Dean.</div>
           )}
         </div>
+      {noteCandidate && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setNoteCandidate(null)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <h3 className="text-base font-semibold text-slate-900">Add shortlist note</h3>
+              <p className="mt-1 text-sm text-slate-500">Why are you shortlisting {noteCandidate.name}?</p>
+            </div>
+            <div className="p-5"><textarea className="input w-full" rows={4} autoFocus value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} placeholder="Enter the reason for recommending this candidate..." /></div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+              <button type="button" className="btn-secondary" onClick={() => setNoteCandidate(null)}>Cancel</button>
+              <button type="button" className="btn-primary" onClick={saveCandidateNote} disabled={!noteDraft.trim()}>Save note</button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
 }
 
 function Workload({ deptId }: { deptId: string }) {
+  /* Redesigned daily workload page — date navigation, automatic aggregation of
+     Teaching + Lab + Mentoring + Additional work, workload indicators, faculty
+     breakdown drawer and HOD task assignment (see WorkloadWorkspace.tsx). */
+  return <WorkloadWorkspace deptId={deptId} />;
+}
+
+function Mentoring({ deptId }: { deptId: string }) {
+  /* Redesigned HOD mentoring workspace — auto-allocation, capacity monitoring,
+     unallocated students and manual reassignment (see MentoringWorkspace.tsx). */
+  return <MentoringWorkspace deptId={deptId} />;
+}
+
+function FacultyWorkspace({ deptId }: { deptId: string }) {
   const { data } = useStore();
+  const [tab, setTab] = useState<'overview' | 'subject-allocation'>('overview');
+  const [query, setQuery] = useState('');
+  const [designation, setDesignation] = useState<string>('all');
+  const [selectedFaculty, setSelectedFaculty] = useState<Staff | null>(null);
+  const [panel, setPanel] = useState<'details' | 'syllabus' | 'workload' | 'performance' | 'mentoring' | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showAssignTask, setShowAssignTask] = useState(false);
+  const [showShortlistPanel, setShowShortlistPanel] = useState(false);
+
   const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
+  const designations = Array.from(new Set(faculty.map((f) => f.designation))).sort();
+
+  const filteredFaculty = faculty.filter((member) => {
+    const matchesQuery = member.name.toLowerCase().includes(query.trim().toLowerCase());
+    const matchesDesignation = designation === 'all' || member.designation === designation;
+    return matchesQuery && matchesDesignation;
+  }).sort((a, b) => {
+    const designationOrder = designationPriority(a.designation) - designationPriority(b.designation);
+    if (designationOrder !== 0) return designationOrder;
+
+    const aEffectiveness = facultyTeachingEffectiveness(data, a);
+    const bEffectiveness = facultyTeachingEffectiveness(data, b);
+    const aPerformance = aEffectiveness?.current ?? Math.min(100, Math.round((a.performanceRating / 5) * 100));
+    const bPerformance = bEffectiveness?.current ?? Math.min(100, Math.round((b.performanceRating / 5) * 100));
+    if (aPerformance !== bPerformance) return aPerformance - bPerformance;
+    return a.name.localeCompare(b.name);
+  });
+
   return (
-    <div>
-      <PageHeader title="Teaching Workload" description="Subjects, weekly hours, and practical sessions per faculty" />
-      <DataTable
-        rows={faculty}
-        columns={[
-          { key: 'name', header: 'Faculty', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'designation', header: 'Designation' },
-          { key: 'subjects', header: 'Subjects', render: (s) => s.subjects.length },
-          { key: 'classes', header: 'Classes', render: (s) => s.classes.length },
-          { key: 'weeklyHours', header: 'Weekly Hours', render: (s) => <span className={s.weeklyHours > 42 ? 'text-rose-600 font-semibold' : ''}>{s.weeklyHours}</span> },
-        ]}
+    <div className="space-y-6">
+      <PageHeader
+        title="Faculty"
+        description="Monitor faculty academics, workload, performance and mentoring"
+        action={tab === 'overview' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 w-64 shadow-sm">
+              <Search className="w-4 h-4 text-slate-400" />
+              <input
+                className="bg-transparent border-0 outline-0 text-sm ml-2 flex-1 placeholder:text-slate-400"
+                placeholder="Search faculty..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <select className="input w-auto" value={designation} onChange={(e) => setDesignation(e.target.value)}>
+              <option value="all">All Designations</option>
+              {designations.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <button type="button" className="btn-primary whitespace-nowrap" onClick={() => setShowShortlistPanel(true)}>
+              <UserRoundCheck className="w-4 h-4" />
+              Shortlisted Candidates
+            </button>
+          </div>
+        ) : undefined}
       />
+
+      <div className="border-b border-slate-200 flex gap-1 overflow-x-auto" role="tablist" aria-label="Faculty">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'overview'}
+          onClick={() => setTab('overview')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === 'overview' ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          <Users className="w-4 h-4" />
+          Faculty Overview
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'subject-allocation'}
+          onClick={() => setTab('subject-allocation')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === 'subject-allocation' ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          <ClipboardCheck className="w-4 h-4" />
+          Subject Allocation
+        </button>
+      </div>
+
+      {tab === 'subject-allocation' && <SubjectAllocationWorkspace deptId={deptId} />}
+      {tab === 'overview' && (
+        <>
+
+      <div className="card overflow-hidden border border-slate-200 shadow-sm">
+        <div className="hidden lg:grid lg:grid-cols-[2.1fr_1.2fr_1fr_1.2fr_1fr] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <span>Faculty</span>
+          <span>Syllabus Completion</span>
+          <span>Workload</span>
+          <span>Performance Monitoring</span>
+          <span>Mentoring</span>
+        </div>
+
+        <div className="divide-y divide-slate-200">
+          {filteredFaculty.length === 0 ? (
+            <div className="p-6 text-sm text-slate-500">No faculty matches the current search or filter.</div>
+          ) : (
+            filteredFaculty.map((member) => {
+              const syllabusAverage = getFacultySyllabusAverage(data, member.id);
+              const workload = computeFacultyDailyWorkload(data, member, new Date());
+              const te = facultyTeachingEffectiveness(data, member);
+              const mentees = getMenteesOfMentor(data, member.id);
+              const performancePct = Math.min(100, Math.round((member.performanceRating / 5) * 100));
+
+              return (
+                <div key={member.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[2.1fr_1.2fr_1fr_1.2fr_1fr] lg:items-center">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FacultyAvatar member={member} />
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFaculty(member);
+                          setPanel('details');
+                        }}
+                        className="block text-left text-base font-semibold text-slate-900 hover:text-blue-700 transition-colors truncate"
+                      >
+                        {member.name}
+                      </button>
+                      <p className="text-sm text-slate-500 truncate">{member.designation}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onDoubleClick={() => {
+                      setSelectedFaculty(member);
+                      setPanel('syllabus');
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-left transition-colors hover:border-blue-200 hover:bg-blue-50"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Avg</span>
+                      <span className={`text-xs font-semibold ${getProgressText(syllabusAverage)}`}>{syllabusAverage}%</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${getProgressColor(syllabusAverage)}`} style={{ width: `${syllabusAverage}%` }} />
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onDoubleClick={() => {
+                      setSelectedFaculty(member);
+                      setPanel('workload');
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-left transition-colors hover:border-indigo-200 hover:bg-indigo-50"
+                  >
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Workload</div>
+                    <div className="mt-1 text-lg font-bold text-slate-900">{workload.total} hrs</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onDoubleClick={() => {
+                      setSelectedFaculty(member);
+                      setPanel('performance');
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-left transition-colors hover:border-amber-200 hover:bg-amber-50"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Teaching</span>
+                      <span className="text-xs font-semibold text-slate-800">{te ? `${te.current}%` : `${performancePct}%`}</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${te ? getProgressColor(te.current) : getProgressColor(performancePct)}`} style={{ width: `${te ? te.current : performancePct}%` }} />
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onDoubleClick={() => {
+                      setSelectedFaculty(member);
+                      setPanel('mentoring');
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-left transition-colors hover:border-emerald-200 hover:bg-emerald-50 cursor-pointer"
+                    title="Double-click to view mentees and reassign mentors"
+                  >
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Mentees</div>
+                    <div className="mt-1 text-lg font-bold text-slate-900">{mentees.length} Mentees</div>
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {selectedFaculty && panel && (
+        <FacultyDrawer
+          staff={selectedFaculty}
+          panel={panel}
+          date={selectedDate}
+          onDateChange={setSelectedDate}
+          onAssignTask={() => setShowAssignTask(true)}
+          onClose={() => {
+            setSelectedFaculty(null);
+            setPanel(null);
+            setShowAssignTask(false);
+          }}
+        />
+      )}
+
+      {selectedFaculty && panel === 'workload' && showAssignTask && (
+        <FacultyAssignTaskModal
+          faculty={selectedFaculty}
+          deptId={deptId}
+          defaultDate={isoDate(selectedDate)}
+          onClose={() => setShowAssignTask(false)}
+        />
+      )}
+      {showShortlistPanel && (
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-slate-900/30" onClick={() => setShowShortlistPanel(false)} />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-3xl overflow-y-auto bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <div><h2 className="text-lg font-semibold text-slate-900">Shortlisted Candidates</h2><p className="text-sm text-slate-500">Review recruitment candidates and forward recommendations to the Dean.</p></div>
+              <button type="button" className="btn-secondary" onClick={() => setShowShortlistPanel(false)}><XCircle className="w-4 h-4" /> Close</button>
+            </div>
+            <RecruitmentShortlist deptId={deptId} />
+          </aside>
+        </div>
+      )}
+        </>
+      )}
     </div>
   );
 }
 
-function Mentoring({ deptId }: { deptId: string }) {
+function FacultyAvatar({ member }: { member: Staff }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = member.name.split(' ').map((part) => part[0]).slice(0, 2).join('');
+
+  if (!member.profileImage || imageFailed) {
+    return <div className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-gradient-to-br from-indigo-100 to-blue-100 text-sm font-semibold text-indigo-700 shadow-sm">{initials}</div>;
+  }
+
+  return <img src={member.profileImage} alt="" className="h-11 w-11 rounded-full border border-slate-200 object-cover shadow-sm" onError={() => setImageFailed(true)} />;
+}
+
+function FacultyDrawer({ staff, panel, date, onDateChange, onAssignTask, onClose }: {
+  staff: Staff;
+  panel: 'details' | 'syllabus' | 'workload' | 'performance' | 'mentoring';
+  date: Date;
+  onDateChange: (d: Date) => void;
+  onAssignTask: () => void;
+  onClose: () => void;
+}) {
   const { data } = useStore();
-  const students = data.students.filter((s) => s.departmentId === deptId);
-  const mentors: Record<string, string> = { st1: 'Dr. Priya Sharma', st2: 'Dr. Arjun Nair', st3: 'Mr. Karthik Rao', st4: 'Dr. Priya Sharma', st5: 'Dr. Arjun Nair', st6: 'Prof. Neha Verma', st7: 'Dr. Lakshmi Menon', st8: 'Dr. Vivek Krishnan', st9: 'Dr. Kavitha Ramesh', st10: 'Dr. Mahesh Pandey' };
+  const titleMap = {
+    details: 'Faculty Details',
+    syllabus: `Syllabus Completion — ${staff.name}`,
+    workload: `Workload — ${staff.name}`,
+    performance: `Performance Monitoring — ${staff.name}`,
+    mentoring: `Mentoring — ${staff.name}`,
+  };
+
   return (
-    <div>
-      <PageHeader title="Mentoring Management" description="Student mentoring assignments" />
-      <DataTable
-        rows={students}
-        columns={[
-          { key: 'name', header: 'Student', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'rollNo', header: 'Roll No' },
-          { key: 'semester', header: 'Sem' },
-          { key: 'mentor', header: 'Mentor', render: (s) => mentors[s.id] ?? 'Not assigned' },
-        ]}
-      />
+    <>
+      <div className="fixed inset-0 z-40 bg-slate-900/20" onClick={onClose} />
+      <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl transition-transform duration-200">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-sm">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Faculty</p>
+            <h3 className="text-xl font-semibold text-slate-900">{titleMap[panel]}</h3>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" aria-label="Close faculty panel">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-6">
+          {panel === 'details' && <FacultyDetailContent staff={staff} />}
+          {panel === 'syllabus' && <FacultySyllabusContent staff={staff} />}
+          {panel === 'workload' && (
+            <FacultyWorkloadDetailPanel
+              staff={staff}
+              date={date}
+              onDateChange={onDateChange}
+              onAssignTask={onAssignTask}
+              onClose={onClose}
+            />
+          )}
+          {panel === 'performance' && <FacultyPerformanceContent staff={staff} />}
+          {panel === 'mentoring' && <FacultyMentoringContent staff={staff} onClose={onClose} />}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function FacultyWorkloadDetailPanel({ staff, date, onDateChange, onAssignTask, onClose }: {
+  staff: Staff;
+  date: Date;
+  onDateChange: (d: Date) => void;
+  onAssignTask: () => void;
+  onClose: () => void;
+}) {
+  const { data } = useStore();
+  const w = computeFacultyDailyWorkload(data, staff, date);
+  const today = new Date();
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 text-sm font-semibold text-white">
+              {staff.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+            </div>
+            <div className="min-w-0">
+              <h4 className="truncate text-base font-semibold text-slate-900">{staff.name}</h4>
+              <p className="truncate text-sm text-slate-500">{staff.designation}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
+            aria-label="Close workload panel"
+          >
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Workload for</p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <button type="button" onClick={() => onDateChange(addDays(date, -1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50" aria-label="Previous date">
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => onDateChange(addDays(date, 1))} className="rounded-lg border border-slate-200 p-1.5 hover:bg-slate-50" aria-label="Next date">
+                <ArrowLeft className="h-4 w-4 rotate-180" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <button type="button" onClick={() => onDateChange(new Date())} className={`rounded-lg px-2.5 py-1.5 font-medium ${isoDate(date) === isoDate(today) ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>
+                Today
+              </button>
+              <span className="rounded-lg bg-blue-600 px-3 py-1.5 font-semibold text-white">{formatDayLabel(date)}</span>
+            </div>
+          </div>
+          <p className="mt-3 text-base font-semibold text-slate-900">{formatFullDate(date)}</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-900 p-4 text-white shadow-sm">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">Total Workload</p>
+        <div className="mt-2 flex items-end justify-between gap-3">
+          <div>
+            <span className="text-3xl font-bold">{w.total}</span>
+            <span className="ml-2 text-base text-slate-300">hrs</span>
+          </div>
+          <div className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-200">Day view</div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-2"><span className="block text-[10px] uppercase tracking-[0.12em] text-slate-300">Teaching</span><span className="mt-1 block font-semibold">{w.teachingHours} hrs</span></div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-2"><span className="block text-[10px] uppercase tracking-[0.12em] text-slate-300">Lab</span><span className="mt-1 block font-semibold">{w.labHours} hrs</span></div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-2"><span className="block text-[10px] uppercase tracking-[0.12em] text-slate-300">Mentoring</span><span className="mt-1 block font-semibold">{w.mentoringHours} hrs</span></div>
+          <div className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-2"><span className="block text-[10px] uppercase tracking-[0.12em] text-slate-300">Additional</span><span className="mt-1 block font-semibold">{w.additionalHours} hrs</span></div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700"><BookOpen className="h-4 w-4" /></span>
+            <p className="text-sm font-semibold text-slate-900">Teaching Hours</p>
+          </div>
+          <span className="text-sm font-bold text-slate-900">{w.teachingHours} hrs</span>
+        </div>
+
+        {w.teachingLines.length === 0 ? (
+          <p className="text-sm text-slate-500">No teaching scheduled for this day.</p>
+        ) : (
+          <div className="space-y-2">
+            {w.teachingLines.map((line) => (
+              <div key={line.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{line.label}</p>
+                    <p className="text-xs text-slate-500">{line.subject}</p>
+                  </div>
+                  <span className="text-sm font-bold text-blue-700">{line.hours} hr</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700"><Beaker className="h-4 w-4" /></span>
+            <p className="text-sm font-semibold text-slate-900">Lab Hours</p>
+          </div>
+          <span className="text-sm font-bold text-slate-900">{w.labHours} hrs</span>
+        </div>
+
+        {w.labLines.length === 0 ? (
+          <p className="text-sm text-slate-500">No laboratory session scheduled for this day.</p>
+        ) : (
+          <div className="space-y-2">
+            {w.labLines.map((line) => (
+              <div key={line.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{line.label}</p>
+                    <p className="text-xs text-slate-500">{line.subject}</p>
+                  </div>
+                  <span className="text-sm font-bold text-indigo-700">{line.hours} hr</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><UserRoundCheck className="h-4 w-4" /></span>
+            <p className="text-sm font-semibold text-slate-900">Mentoring Management</p>
+          </div>
+          <span className="text-sm font-bold text-slate-900">{w.mentoringHours} hrs</span>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Assigned Mentees</span>
+          <span className="text-sm font-semibold text-slate-900">{w.menteeCount} Students</span>
+        </div>
+
+        {w.menteeCount === 0 ? (
+          <div className="space-y-2 text-sm text-slate-500">
+            <p>No mentees assigned</p>
+            <p>Mentoring Workload: 0 hrs</p>
+          </div>
+        ) : (
+          <div className="space-y-2 text-sm text-slate-600">
+            <p className="font-medium text-slate-900">Mentoring Workload: {w.mentoringHours} hrs</p>
+            <p>{w.menteeCount} students assigned → {w.mentoringHours} hrs based on the configured mentoring rule.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700"><Briefcase className="h-4 w-4" /></span>
+            <p className="text-sm font-semibold text-slate-900">Additional Assigned Work</p>
+          </div>
+          <span className="text-sm font-bold text-slate-900">{w.additionalHours} hrs</span>
+        </div>
+
+        {w.additionalTasks.length === 0 ? (
+          <p className="text-sm text-slate-500">No additional work assigned for this date</p>
+        ) : (
+          <div className="space-y-2">
+            {w.additionalTasks.map((task) => (
+              <div key={task.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{task.title}</p>
+                    <p className="text-xs text-slate-500">{WORK_CATEGORY_LABELS[task.category] ?? task.category}</p>
+                  </div>
+                  <span className="text-sm font-bold text-amber-700">{task.allocatedHours} hrs</span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                  <span className={`rounded-full px-2 py-0.5 font-medium ${TASK_PRIORITY_STYLES[task.priority] ?? 'bg-slate-100 text-slate-600'}`}>{task.priority}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">Status: {task.status}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">Deadline: {formatIso(task.deadline)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <button type="button" onClick={onAssignTask} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800">
+        <Plus className="h-4 w-4" />
+        Assign Additional Task
+      </button>
     </div>
   );
+}
+
+function FacultyAssignTaskModal({ faculty, deptId, defaultDate, onClose }: {
+  faculty: Staff;
+  deptId: string;
+  defaultDate: string;
+  onClose: () => void;
+}) {
+  const { currentUser, addAssignedTask, addNotification } = useStore();
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState(defaultDate);
+  const [allocatedHours, setAllocatedHours] = useState(1);
+  const [priority, setPriority] = useState<AssignedTask['priority']>('medium');
+  const [deadline, setDeadline] = useState('');
+  const [category, setCategory] = useState<AssignedTask['category']>('other');
+  const [remarks, setRemarks] = useState('');
+  const [error, setError] = useState('');
+
+  const canSave = title.trim().length > 0 && date && allocatedHours > 0;
+
+  const save = () => {
+    if (!canSave) {
+      setError('Task name, date and allocated hours are required.');
+      return;
+    }
+    if (!currentUser) return;
+
+    const task = {
+      id: `at-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      facultyId: faculty.id,
+      departmentId: deptId,
+      title: title.trim(),
+      description: description.trim(),
+      date,
+      allocatedHours,
+      priority,
+      deadline: deadline || date,
+      category,
+      status: 'pending' as const,
+      assignedBy: currentUser.id,
+      assignedDate: isoDate(new Date()),
+      remarks: remarks.trim() || undefined,
+    };
+
+    addAssignedTask(task);
+    addNotification({
+      id: `n${Date.now()}`,
+      title: 'Task assigned',
+      message: `${task.title} (${task.allocatedHours} hrs) assigned to ${faculty.name}.`,
+      date: isoDate(new Date()),
+      audience: [faculty.role],
+      targetUserIds: [faculty.id],
+      read: false,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assign Task</p>
+            <h3 className="text-lg font-semibold text-slate-900">Assign Additional Task</h3>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" aria-label="Close assignment panel">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="max-h-[75vh] overflow-y-auto p-5">
+          <div className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-xs font-semibold text-white">
+              {faculty.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Assigned to</p>
+              <p className="text-sm font-semibold text-slate-900">{faculty.name} · {faculty.designation}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="sm:col-span-2 block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Task Name</span>
+              <input className="input w-full" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Examination Documentation" />
+            </label>
+
+            <label className="sm:col-span-2 block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Description</span>
+              <textarea className="input w-full" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Task details" />
+            </label>
+
+            <label className="block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Work Category</span>
+              <select className="input w-full" value={category} onChange={(e) => setCategory(e.target.value as AssignedTask['category'])}>
+                {(Object.keys(WORK_CATEGORY_LABELS) as AssignedTask['category'][]).map((key) => (
+                  <option key={key} value={key}>{WORK_CATEGORY_LABELS[key]}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Date</span>
+              <input type="date" className="input w-full" value={date} onChange={(e) => setDate(e.target.value)} />
+            </label>
+
+            <label className="block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Allocated Hours</span>
+              <input type="number" min={0.5} step={0.5} className="input w-full" value={allocatedHours} onChange={(e) => setAllocatedHours(Number(e.target.value))} />
+            </label>
+
+            <label className="block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Priority</span>
+              <select className="input w-full" value={priority} onChange={(e) => setPriority(e.target.value as AssignedTask['priority'])}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+
+            <label className="block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Deadline</span>
+              <input type="date" className="input w-full" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            </label>
+
+            <label className="sm:col-span-2 block text-sm text-slate-700">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Remarks</span>
+              <textarea className="input w-full" rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional remarks" />
+            </label>
+          </div>
+
+          {error && <p className="mt-4 text-sm text-rose-600">{error}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+          <button type="button" onClick={save} className="btn-primary" disabled={!canSave}>Assign Task</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FacultyDetailContent({ staff }: { staff: Staff }) {
+  const { data } = useStore();
+  const dept = data.departments.find((d) => d.id === staff.departmentId);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex items-center justify-center text-lg font-semibold">
+          {staff.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+        </div>
+        <div>
+          <h4 className="text-lg font-semibold text-slate-900">{staff.name}</h4>
+          <p className="text-sm text-slate-500">{staff.designation} · {dept?.name}</p>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Employment Information</p>
+          <dl className="grid grid-cols-2 gap-3">
+            <Field label="Emp. ID" value={staff.id.toUpperCase()} />
+            <Field label="Role" value={staff.role} />
+            <Field label="Employment" value={staff.employmentType} />
+            <Field label="Joined On" value={staff.joinedOn} />
+            <Field label="Weekly Hours" value={`${staff.weeklyHours} hrs`} />
+            <Field label="Status" value={staff.status} />
+          </dl>
+        </div>
+
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Contact & Qualification</p>
+          <dl className="grid grid-cols-2 gap-3">
+            <Field label="Email" value={staff.email} />
+            <Field label="Phone" value={staff.phone} />
+            <Field label="Qualification" value={staff.qualifications} />
+          </dl>
+        </div>
+
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Personal Information</p>
+          <dl className="grid grid-cols-2 gap-3">
+            <Field label="Gender" value={staff.gender} />
+            <Field label="Date of Birth" value={staff.dob} />
+            <Field label="Blood Group" value={staff.bloodGroup} />
+            <Field label="Address" value={staff.address} />
+          </dl>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FacultySyllabusContent({ staff }: { staff: Staff }) {
+  const { data } = useStore();
+  const subjects = data.subjects.filter((subject) => subject.facultyId === staff.id);
+  const grouped = new Map<string, typeof subjects>();
+
+  subjects.forEach((subject) => {
+    const classKey = subject.classes.length ? subject.classes.join(', ') : 'General';
+    const arr = grouped.get(classKey) ?? [];
+    arr.push(subject);
+    grouped.set(classKey, arr);
+  });
+
+  return (
+    <div className="space-y-5">
+      {Array.from(grouped.entries()).map(([className, classSubjects]) => (
+        <div key={className} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-3 text-sm font-semibold text-slate-900">{className}</p>
+          <div className="space-y-2">
+            {classSubjects.map((subject) => {
+              const actual = subject.syllabusCompletion;
+              const expected = getExpectedCompletion(actual);
+              const status = getSyllabusStatus(actual);
+              return (
+                <div key={subject.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{subject.name}</p>
+                      <p className="text-xs text-slate-500">{subject.code}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.badge}`}>{status.label}</span>
+                    </div>
+                  </div>
+                  <div className="mb-2 grid grid-cols-[1.3fr_1fr] gap-3 text-xs text-slate-600">
+                    <span>{subject.unitsCompleted} / {subject.unitsTotal} Units</span>
+                    <span className="text-right font-semibold text-slate-900">Actual: {actual}% | Expected: {expected}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className={`h-full rounded-full ${status.bar}`} style={{ width: `${actual}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {subjects.length === 0 && <div className="card p-4 text-sm text-slate-500">No syllabus subjects are currently assigned to this faculty.</div>}
+    </div>
+  );
+}
+
+function FacultyWorkloadContent({ staff }: { staff: Staff }) {
+  const { data } = useStore();
+  const workload = computeFacultyDailyWorkload(data, staff, new Date());
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <MetricTile label="Teaching Hours" value={`${workload.teachingHours} hrs`} tone="blue" />
+        <MetricTile label="Lab Hours" value={`${workload.labHours} hrs`} tone="violet" />
+        <MetricTile label="Mentoring Management" value={`${workload.mentoringHours} hrs`} tone="emerald" />
+        <MetricTile label="Other Assigned Work" value={`${workload.additionalHours} hrs`} tone="amber" />
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Total Workload</span>
+          <span className="text-xl font-bold text-slate-900">{workload.total} hrs</span>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {workload.teachingLines.length > 0 && (
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="mb-2 text-sm font-semibold text-slate-900">Teaching Hours</p>
+            {workload.teachingLines.map((line) => (
+              <div key={line.id} className="flex items-center justify-between text-sm text-slate-700">
+                <span>{line.subject}</span>
+                <span>{line.hours} hrs</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {workload.labLines.length > 0 && (
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="mb-2 text-sm font-semibold text-slate-900">Lab Hours</p>
+            {workload.labLines.map((line) => (
+              <div key={line.id} className="flex items-center justify-between text-sm text-slate-700">
+                <span>{line.subject}</span>
+                <span>{line.hours} hrs</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FacultyPerformanceContent({ staff }: { staff: Staff }) {
+  const { data } = useStore();
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const dept = data.departments.find((department) => department.id === staff.departmentId);
+  const effectiveness = facultyTeachingEffectiveness(data, staff);
+  const selectedSubject = effectiveness?.subjects.find((subject) => subject.subjectId === selectedSubjectId);
+  const trend = effectiveness ? teTrend(effectiveness.change) : null;
+
+  if (selectedSubject) {
+    return <FacultySubjectEffectivenessDetail result={selectedSubject} onBack={() => setSelectedSubjectId(null)} />;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 text-sm font-semibold text-white">
+          {staff.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+        </div>
+        <div className="min-w-0">
+          <h4 className="truncate text-base font-semibold text-slate-900">{staff.name}</h4>
+          <p className="truncate text-sm text-slate-500">{staff.designation} · {dept?.name}</p>
+          <div className="mt-1"><span className="badge bg-emerald-100 text-emerald-700">{staff.status === 'active' ? 'Active' : staff.status}</span></div>
+        </div>
+      </div>
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Performance Overview</p>
+        <div className="grid grid-cols-2 gap-3">
+          <MetricTile label="Attendance" value={`${staff.attendancePct}%`} tone={staff.attendancePct >= 85 ? 'emerald' : staff.attendancePct >= 70 ? 'amber' : 'rose'} />
+          <div className="rounded-xl border border-slate-200 bg-white p-3 text-center">
+            <p className="text-xs text-slate-500">Teaching Effectiveness</p>
+            <p className={`text-lg font-bold ${effectiveness?.status.text ?? 'text-slate-400'}`}>{effectiveness ? `${effectiveness.current}%` : '—'}</p>
+            {effectiveness && trend && <p className={`text-xs font-medium ${trend.cls}`}>{trend.arrow} {Math.abs(effectiveness.change)}% {effectiveness.change === 0 ? '' : 'vs Previous Semester'}</p>}
+          </div>
+          <MetricTile label="Rating" value={`${staff.performanceRating || '—'} / 5`} tone="blue" />
+          <MetricTile label="Pending Work" value={staff.pendingWork} tone={staff.pendingWork > 0 ? 'amber' : 'emerald'} />
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Teaching Effectiveness</p>
+          {effectiveness && <span className={`badge ${effectiveness.status.badge}`}>{effectiveness.status.label}</span>}
+        </div>
+        {effectiveness ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-end justify-between gap-3">
+              <div><p className="text-3xl font-bold text-slate-900">{effectiveness.current}%</p><p className={`text-xs font-semibold ${trend?.cls}`}>{trend?.arrow} {Math.abs(effectiveness.change)}% compared with Previous Semester</p></div>
+              <span className={`badge ${effectiveness.status.badge}`}>Status: {effectiveness.status.label}</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${effectiveness.status.bar}`} style={{ width: `${effectiveness.current}%` }} /></div>
+            <p className="mt-3 text-xs leading-5 text-slate-600">Overall teaching effectiveness is generated from academic performance data across the classes and subjects handled by this faculty.</p>
+          </div>
+        ) : <div className="card p-4 text-sm text-slate-500">No academic data is available for this faculty's assigned subjects yet.</div>}
+      </section>
+
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Teaching Effectiveness by Class & Subject</p>
+        {effectiveness ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {effectiveness.subjects.map((subject) => {
+              const subjectTrend = teTrend(subject.change);
+              return (
+                <button key={subject.subjectId} type="button" onClick={() => setSelectedSubjectId(subject.subjectId)} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/30">
+                  <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-slate-900">{subject.classHeading}{subject.classSections ? ` · ${subject.classSections}` : ''}</p><p className="mt-1 text-sm text-slate-700">{subject.subjectName}</p><p className="text-xs text-slate-500">{subject.subjectCode}</p></div><span className={`badge shrink-0 ${subject.status.badge}`}>{subject.status.label}</span></div>
+                  <div className="mt-3 flex items-baseline justify-between gap-2"><span className="text-2xl font-bold text-slate-900">{subject.current}%</span><span className={`text-xs font-semibold ${subjectTrend.cls}`}>{subjectTrend.arrow} {Math.abs(subject.change)}% vs Previous Semester</span></div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${subject.status.bar}`} style={{ width: `${subject.current}%` }} /></div>
+                  <p className="mt-2 text-xs font-medium text-blue-600">View Details →</p>
+                </button>
+              );
+            })}
+          </div>
+        ) : <p className="text-sm text-slate-500">No class or subject academic results are available.</p>}
+      </section>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">Teaching effectiveness uses academic assessment and outcome data only. No student feedback or opinion scores are included.</div>
+    </div>
+  );
+}
+
+function FacultySubjectEffectivenessDetail({ result, onBack }: { result: NonNullable<ReturnType<typeof facultyTeachingEffectiveness>>['subjects'][number]; onBack: () => void }) {
+  const trend = teTrend(result.change);
+  return (
+    <div className="space-y-5">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"><ArrowLeft className="h-3.5 w-3.5" /> Back to class & subject results</button>
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-start justify-between gap-3"><div><h4 className="text-base font-semibold text-slate-900">{result.subjectName}</h4><p className="text-sm text-slate-500">{result.classHeading}{result.classSections ? ` · ${result.classSections}` : ''} · {result.subjectCode}</p></div><span className={`badge ${result.status.badge}`}>{result.status.label}</span></div>
+        <div className="mt-4 flex items-baseline gap-2"><span className="text-3xl font-bold text-slate-900">{result.current}%</span><span className={`text-xs font-semibold ${trend.cls}`}>{trend.arrow} {Math.abs(result.change)}% vs Previous Semester</span></div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${result.status.bar}`} style={{ width: `${result.current}%` }} /></div>
+        <p className="mt-2 text-xs text-slate-500">Previous period: {result.previous}% · {result.studentCount} students tracked</p>
+      </div>
+      <section>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Detailed Academic Indicators</p>
+        <div className="space-y-2">
+          {result.indicators.map((indicator) => {
+            const indicatorTrend = teTrend(indicator.change);
+            return <div key={indicator.key} className="rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium text-slate-800">{indicator.label}</p><span className={`badge ${indicator.status.badge}`}>{indicator.status.label}</span></div><div className="mt-2 flex items-baseline justify-between gap-2"><span className="text-lg font-bold text-slate-900">{indicator.current}%</span><span className={`text-xs font-semibold ${indicatorTrend.cls}`}>{indicatorTrend.arrow} {Math.abs(indicator.change)}% vs Previous Semester</span></div><p className="mt-1 text-xs text-slate-500">Previous: {indicator.previous}%</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${indicator.status.bar}`} style={{ width: `${indicator.current}%` }} /></div></div>;
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+type FacultyMentoringContentProps = { staff: Staff; onClose: () => void };
+
+function FacultyMentoringContent({ staff, onClose }: FacultyMentoringContentProps) {
+  const { data, currentUser, saveMentorAllocation, addMentoringHistory } = useStore();
+  const [search, setSearch] = useState('');
+  const [actionStudent, setActionStudent] = useState<string | null>(null);
+  const [viewStudent, setViewStudent] = useState<Student | null>(null);
+  const [reassignStudent, setReassignStudent] = useState<Student | null>(null);
+  const [newMentorId, setNewMentorId] = useState('');
+  const mentees = getMenteesOfMentor(data, staff.id);
+  const load = getMentorPool(data, staff.departmentId, MENTOR_CAPACITY).find((item) => item.mentor.id === staff.id);
+  const mentorLoad = load ?? { count: mentees.length, capacity: MENTOR_CAPACITY, pct: Math.round((mentees.length / MENTOR_CAPACITY) * 100), loadState: loadStateFor(mentees.length, MENTOR_CAPACITY) };
+  const dept = data.departments.find((item) => item.id === staff.departmentId);
+  const filteredMentees = mentees.filter((student) => {
+    const q = search.trim().toLowerCase();
+    return !q || student.name.toLowerCase().includes(q) || student.rollNo.toLowerCase().includes(q);
+  });
+  const mentorOptions = getMentorPool(data, staff.departmentId, MENTOR_CAPACITY).filter((item) => item.mentor.id !== staff.id && item.mentor.status === 'active');
+  const mentorThCls = 'px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500';
+  const mentorTdCls = 'px-3 py-2 text-xs text-slate-700';
+  const loadMeta = mentorLoad.loadState === 'full' ? { label: 'Full', badge: 'bg-rose-100 text-rose-700', bar: 'bg-rose-500' } : mentorLoad.loadState === 'near-capacity' ? { label: 'Near Capacity', badge: 'bg-amber-100 text-amber-700', bar: 'bg-amber-500' } : { label: 'Balanced', badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500' };
+
+  const openReassign = (student: Student) => {
+    setActionStudent(null);
+    setReassignStudent(student);
+    setNewMentorId('');
+  };
+
+  const confirmReassign = () => {
+    if (!reassignStudent || !newMentorId || !currentUser) return;
+    const allocation = getAllocationForStudent(data, reassignStudent.id);
+    if (!allocation) return;
+    saveMentorAllocation({ ...allocation, previousMentorId: allocation.mentorId, mentorId: newMentorId, date: todayISO(), allocatedBy: currentUser.id });
+    addMentoringHistory({
+      id: uid('mhs'),
+      allocationId: allocation.id,
+      studentId: reassignStudent.id,
+      date: todayISO(),
+      action: 'reassigned',
+      previousMentorId: allocation.mentorId,
+      newMentorId,
+      performedBy: currentUser.id,
+      note: `Manual reassignment by HOD · ${staff.name} → ${data.staff.find((item) => item.id === newMentorId)?.name ?? newMentorId}`,
+    });
+    setReassignStudent(null);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 text-sm font-semibold text-white">{staff.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}</div>
+            <div className="min-w-0"><h4 className="truncate text-base font-semibold text-slate-900">{staff.name}</h4><p className="truncate text-sm text-slate-500">{staff.designation} · {dept?.name}</p><div className="mt-1 flex flex-wrap gap-1.5"><span className="badge bg-blue-100 text-blue-700">{mentorLoad.count} Mentees</span><span className={`badge ${loadMeta.badge}`}>{loadMeta.label}</span></div></div>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" aria-label="Close mentee panel"><XCircle className="h-4 w-4" /></button>
+        </div>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Current Mentoring Load</p><p className="mt-1 text-2xl font-bold text-slate-900">{mentorLoad.count} <span className="text-sm font-medium text-slate-500">/ {mentorLoad.capacity}</span></p></div><span className="text-sm font-semibold text-slate-700">{mentorLoad.pct}% utilized</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${loadMeta.bar}`} style={{ width: `${Math.min(100, mentorLoad.pct)}%` }} /></div><p className="mt-2 text-xs text-slate-500">{Math.max(0, mentorLoad.capacity - mentorLoad.count)} mentoring slots available</p></div>
+      </div>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-900">Mentees <span className="font-normal text-slate-500">({mentees.length})</span></p><span className="text-xs text-slate-500">Active allocations</span></div>
+        <div className="mb-3 flex items-center rounded-xl border border-slate-200 bg-white px-3 py-2"><Search className="h-4 w-4 text-slate-400" /><input className="ml-2 w-full border-0 bg-transparent text-sm outline-none placeholder:text-slate-400" placeholder="Search mentee or roll number" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+        {mentees.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center"><Users className="mx-auto h-7 w-7 text-slate-400" /><p className="mt-2 text-sm font-semibold text-slate-900">No Mentees Assigned</p><p className="mt-1 text-xs text-slate-500">This mentor currently has no active mentees.</p></div> : <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[600px]"><thead className="bg-slate-50"><tr><th className={mentorThCls}>Mentee</th><th className={mentorThCls}>Roll No.</th><th className={mentorThCls}>Semester</th><th className={mentorThCls}>Class</th><th className={mentorThCls}>Allocation Date</th><th className={mentorThCls}>Status</th><th className={`${mentorThCls} text-right`}>Action</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredMentees.map((student) => { const allocation = getAllocationForStudent(data, student.id); return <tr key={student.id} className="hover:bg-slate-50"><td className={`${mentorTdCls} font-medium text-slate-900`}>{student.name}</td><td className={mentorTdCls}>{student.rollNo}</td><td className={mentorTdCls}>{student.semester}</td><td className={mentorTdCls}>{mentoringClassLabel(dept?.code ?? '', student.section)}</td><td className={mentorTdCls}>{allocation?.date ?? '—'}</td><td className={mentorTdCls}><span className="badge bg-emerald-100 text-emerald-700">Active</span></td><td className={`${mentorTdCls} text-right`}><span className="relative inline-block"><button type="button" onClick={() => setActionStudent(actionStudent === student.id ? null : student.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label={`Actions for ${student.name}`}><span className="text-lg leading-none">⋮</span></button>{actionStudent === student.id && <span className="absolute right-0 top-8 z-20 w-44 rounded-xl border border-slate-200 bg-white py-1.5 text-left shadow-lg"><MentorActionButton icon={Eye} label="View Student" onClick={() => { setActionStudent(null); setViewStudent(student); }} /><MentorActionButton icon={ArrowRightLeft} label="Reassign Mentor" onClick={() => openReassign(student)} /></span>}</span></td></tr>; })}</tbody></table>{filteredMentees.length === 0 && <p className="p-5 text-center text-sm text-slate-500">No mentees match this search.</p>}</div>}
+      </section>
+
+      {viewStudent && <StudentDetailModal student={viewStudent} open={!!viewStudent} onClose={() => setViewStudent(null)} />}
+      {reassignStudent && <MentorReassignDialog student={reassignStudent} currentMentor={staff} mentors={mentorOptions} selectedMentorId={newMentorId} onSelect={setNewMentorId} onCancel={() => setReassignStudent(null)} onConfirm={confirmReassign} />}
+    </div>
+  );
+}
+
+function MentorActionButton({ icon: Icon, label, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"><Icon className="h-4 w-4 text-slate-400" />{label}</button>;
+}
+
+function MentorReassignDialog({ student, currentMentor, mentors, selectedMentorId, onSelect, onCancel, onConfirm }: { student: Student; currentMentor: Staff; mentors: ReturnType<typeof getMentorPool>; selectedMentorId: string; onSelect: (id: string) => void; onCancel: () => void; onConfirm: () => void }) {
+  return <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"><div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onCancel} /><div className="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Mentor Allocation</p><h3 className="text-lg font-semibold text-slate-900">Reassign Mentee</h3></div><button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" aria-label="Close reassignment dialog"><XCircle className="h-4 w-4" /></button></div><div className="space-y-4 p-5"><div className="rounded-xl bg-slate-50 p-3"><p className="text-sm font-semibold text-slate-900">{student.name}</p><p className="text-xs text-slate-500">Roll No: {student.rollNo} · Semester {student.semester} · {student.section}</p></div><div><p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Current Mentor</p><p className="text-sm text-slate-900">{currentMentor.name}</p></div><label className="block"><span className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Reassign To</span><select className="input w-full" value={selectedMentorId} onChange={(event) => onSelect(event.target.value)}><option value="">Select eligible mentor</option>{mentors.map((mentor) => { const full = mentor.count >= mentor.capacity; const near = mentor.count / mentor.capacity >= 0.8; return <option key={mentor.mentor.id} value={mentor.mentor.id} disabled={full}>{mentor.mentor.name} — {mentor.count} / {mentor.capacity}{near ? ' · Near Capacity' : ''}{full ? ' · Full' : ''}</option>; })}</select></label><div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600"><p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Reassignment Summary</p><p>From: <span className="font-semibold text-slate-900">{currentMentor.name}</span></p><p>To: <span className="font-semibold text-slate-900">{mentors.find((mentor) => mentor.mentor.id === selectedMentorId)?.mentor.name ?? '—'}</span></p><p>Mentee: <span className="font-semibold text-slate-900">{student.name} · {student.rollNo}</span></p></div></div><div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4"><button type="button" onClick={onCancel} className="btn-secondary">Cancel</button><button type="button" onClick={onConfirm} className="btn-primary" disabled={!selectedMentorId}>Confirm Reassignment</button></div></div></div>;
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</dt>
+      <dd className="mt-1 text-sm text-slate-900">{value || '—'}</dd>
+    </div>
+  );
+}
+
+function MetricTile({ label, value, tone }: { label: string; value: string | number; tone: 'blue' | 'violet' | 'emerald' | 'amber' | 'rose' | 'slate' }) {
+  const toneStyles = {
+    blue: 'bg-blue-50 text-blue-700 border-blue-100',
+    violet: 'bg-violet-50 text-violet-700 border-violet-100',
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    rose: 'bg-rose-50 text-rose-700 border-rose-100',
+    slate: 'bg-slate-100 text-slate-700 border-slate-200',
+  };
+
+  return (
+    <div className={`rounded-xl border p-3 ${toneStyles[tone]}`}>
+      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-2 text-xl font-bold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function TrendChart({ values }: { values: number[] }) {
+  const width = 300;
+  const height = 90;
+  const padding = 12;
+  const max = Math.max(100, ...values);
+  const min = Math.min(0, ...values);
+  const normalized = values.map((value, index) => {
+    const x = padding + (index * (width - padding * 2)) / Math.max(values.length - 1, 1);
+    const y = height - padding - ((value - min) / Math.max(max - min || 1, 1)) * (height - padding * 2);
+    return { x, y, value };
+  });
+  const line = normalized.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`).join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-20 w-full">
+      <path d={line} fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" />
+      {normalized.map((point, index) => (
+        <circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r="3" fill="#2563eb" />
+      ))}
+    </svg>
+  );
+}
+
+function getFacultySyllabusAverage(data: any, facultyId: string): number {
+  const subjects = data.subjects.filter((subject: any) => subject.facultyId === facultyId);
+  if (!subjects.length) return 0;
+  return Math.round(subjects.reduce((sum: number, subject: any) => sum + subject.syllabusCompletion, 0) / subjects.length);
+}
+
+function getProgressColor(pct: number) {
+  if (pct > 80) return 'bg-emerald-500';
+  if (pct >= 70) return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+
+function getProgressText(pct: number) {
+  if (pct > 80) return 'text-emerald-600';
+  if (pct >= 70) return 'text-amber-600';
+  return 'text-rose-600';
+}
+
+function designationPriority(designation: string): number {
+  const normalized = designation.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (normalized === 'professor') return 0;
+  if (normalized === 'associate professor') return 1;
+  if (normalized === 'assistant professor') return 2;
+  if (normalized === 'lecturer' || normalized === 'teaching assistant') return 3;
+  return 4;
+}
+
+function getSyllabusStatus(pct: number) {
+  if (pct >= 85) return { label: 'Completed', badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500' };
+  if (pct >= 70) return { label: 'On Track', badge: 'bg-amber-100 text-amber-700', bar: 'bg-amber-500' };
+  return { label: 'Behind Schedule', badge: 'bg-rose-100 text-rose-700', bar: 'bg-rose-500' };
+}
+
+function getExpectedCompletion(pct: number) {
+  if (pct >= 80) return 85;
+  if (pct >= 70) return 80;
+  return 75;
 }
 
 /* Faculty Management — main menu hosting the sub-pages as tabs */
 const FACULTY_TABS: TabDef[] = [
   { id: 'faculty-perf', label: 'Faculty Performance' },
-  { id: 'subject-alloc', label: 'Subject Allocation' },
-  { id: 'workload', label: 'Teaching Workload' },
+  { id: 'workload', label: 'Workload' },
   { id: 'mentoring', label: 'Mentoring Management' },
 ];
 
@@ -329,7 +1774,6 @@ function FacultyManagement({ deptId, onNavigate }: { deptId: string; onNavigate?
     <div>
       <Tabs tabs={FACULTY_TABS} active={tab} onChange={setTab} />
       {tab === 'faculty-perf' && <FacultyPerf deptId={deptId} onNavigate={onNavigate} />}
-      {tab === 'subject-alloc' && <SubjectAllocationWorkspace deptId={deptId} />}
       {tab === 'workload' && <Workload deptId={deptId} />}
       {tab === 'mentoring' && <Mentoring deptId={deptId} />}
     </div>
@@ -340,20 +1784,86 @@ function FacultyPerf({ deptId, onNavigate }: { deptId: string; onNavigate?: (id:
   const { data } = useStore();
   const [selected, setSelected] = useState<Staff | null>(null);
   const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
+
+  const facultyMetrics = faculty.map((member) => {
+    const te = facultyTeachingEffectiveness(data, member);
+    return {
+      member,
+      te,
+      statusKey: te?.status.key ?? null,
+    };
+  });
+
+  const teachingData = facultyMetrics.filter((item) => item.te);
+  const totalFaculty = faculty.length;
+  const avgTeachingEffectiveness = teachingData.length
+    ? Math.round(teachingData.reduce((sum, item) => sum + (item.te?.current ?? 0), 0) / teachingData.length)
+    : 0;
+  const goodPerformance = teachingData.filter((item) => item.statusKey === 'good').length;
+  const needsAttention = teachingData.filter((item) => item.statusKey && item.statusKey !== 'good').length;
+  const departmentPrevious = teachingData.length
+    ? Math.round(teachingData.reduce((sum, item) => sum + (item.te?.previous ?? 0), 0) / teachingData.length)
+    : 0;
+  const departmentCurrent = avgTeachingEffectiveness;
+  const departmentChange = departmentCurrent - departmentPrevious;
+  const trendArrow = departmentChange > 0 ? '↑' : departmentChange < 0 ? '↓' : '—';
+  const trendText = departmentChange > 0
+    ? `${Math.abs(departmentChange)}% improvement`
+    : departmentChange < 0
+      ? `${Math.abs(departmentChange)}% decline`
+      : 'No change';
+
   return (
     <div>
       <PageHeader title="Faculty Performance" description="Multiple performance indicators" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Faculty" value={totalFaculty} icon={<Users className="w-5 h-5" />} accent="blue" />
+        <StatCard label="Average Teaching Effectiveness" value={`${avgTeachingEffectiveness}%`} icon={<TrendingUp className="w-5 h-5" />} accent="indigo" />
+        <StatCard label="Good Performance" value={goodPerformance} icon={<CheckSquare className="w-5 h-5" />} accent="emerald" />
+        <StatCard label="Needs Attention" value={needsAttention} icon={<AlertTriangle className="w-5 h-5" />} accent="amber" />
+      </div>
       <DataTable
         rows={faculty}
         columns={[
           { key: 'name', header: 'Faculty', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'attendancePct', header: 'Attendance' },
-          { key: 'feedbackScore', header: 'Feedback', render: (s) => s.feedbackScore || '—' },
+          {
+            key: 'attendancePct',
+            header: 'Attendance',
+            render: (s) => <span>{s.attendancePct}%</span>,
+          },
+          {
+            key: 'teachingEffectiveness',
+            header: 'Teaching Effectiveness',
+            render: (s) => {
+              const te = facultyTeachingEffectiveness(data, s);
+              if (!te) return <span className="text-slate-400">- No Data</span>;
+              const t = teTrend(te.change);
+              return (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-slate-900">{te.current}%</span>
+                  <span className={`text-xs font-medium ${t.cls}`} title={`Previous: ${te.previous}%`}>{t.arrow} {Math.abs(te.change)}%</span>
+                  <span className={`badge ${te.status.badge}`}>{te.status.label}</span>
+                </div>
+              );
+            },
+          },
           { key: 'performanceRating', header: 'Rating', render: (s) => s.performanceRating || '—' },
           { key: 'pendingWork', header: 'Pending', render: (s) => s.pendingWork },
         ]}
         onRowDoubleClick={(s) => setSelected(s)}
       />
+      <div className="card p-5 mt-6">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Department Performance Trend</p>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">Teaching Effectiveness</p>
+          <p className="mt-2 text-sm text-slate-600">
+            Previous Semester: <span className="font-semibold text-slate-900">{departmentPrevious}%</span> → Current Semester: <span className="font-semibold text-slate-900">{departmentCurrent}%</span>
+          </p>
+          <p className={`mt-3 text-base font-semibold ${departmentChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {trendArrow} {trendText}
+          </p>
+        </div>
+      </div>
       <FacultyPerformanceModal staff={selected} open={!!selected} onClose={() => setSelected(null)} onNavigate={onNavigate} />
     </div>
   );
@@ -405,7 +1915,7 @@ function StudentManagement({ deptId }: { deptId: string }) {
       {tab === 'students' && <StudentsWithAttendance deptId={deptId} />}
       {tab === 'academic' && <AcademicPerfView deptId={deptId} />}
       {tab === 'projects' && <ProjectProgress deptId={deptId} />}
-      {tab === 'grievances' && <GrievancesPanel scopeDept={deptId} canAssign />}
+      {tab === 'grievances' && <GrievancesPanel scopeDept={deptId} canAssign semesterFilter />}
     </div>
   );
 }
@@ -418,6 +1928,7 @@ function StudentsWithAttendance({ deptId }: { deptId: string }) {
       <StudentsDirectory
         scopeDept={deptId}
         editable
+        classFilter
         extraStats={
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <StatCard label="Dept Average" value={`${Math.round(students.reduce((a, s) => a + s.attendancePct, 0) / students.length)}%`} icon={<TrendingUp className="w-5 h-5" />} accent="blue" />
@@ -434,10 +1945,18 @@ function StudentsWithAttendance({ deptId }: { deptId: string }) {
 function AcademicPerfView({ deptId }: { deptId: string }) {
   const { data } = useStore();
   const [selected, setSelected] = useState<Student | null>(null);
-  const students = data.students.filter((s) => s.departmentId === deptId);
+  const [filterSem, setFilterSem] = useState('all');
+  const deptStudents = data.students.filter((s) => s.departmentId === deptId);
+  const semesters = [...new Set(deptStudents.map((s) => s.semester))].sort((a, b) => a - b);
+  const students = deptStudents.filter((s) => filterSem === 'all' || s.semester === Number(filterSem));
   return (
     <div>
-      <PageHeader title="Academic Performance" description="View-only — internal marks, GPA/CGPA, backlogs, and trends" />
+      <PageHeader title="Academic Performance" description="View-only — internal marks, GPA/CGPA, backlogs, and trends" action={
+        <select className="input w-auto" value={filterSem} onChange={(e) => setFilterSem(e.target.value)}>
+          <option value="all">All Semesters</option>
+          {semesters.map((semester) => <option key={semester} value={semester}>Sem {semester}</option>)}
+        </select>
+      } />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Avg GPA" value={students.length ? (students.reduce((a, s) => a + s.gpa, 0) / students.length).toFixed(2) : '—'} icon={<TrendingUp className="w-5 h-5" />} accent="blue" />
         <StatCard label="Avg CGPA" value={students.length ? (students.reduce((a, s) => a + s.cgpa, 0) / students.length).toFixed(2) : '—'} icon={<TrendingUp className="w-5 h-5" />} accent="indigo" />
@@ -450,7 +1969,7 @@ function AcademicPerfView({ deptId }: { deptId: string }) {
           { key: 'name', header: 'Student', render: (s) => <span className="font-medium">{s.name}</span> },
           { key: 'rollNo', header: 'Roll No' },
           { key: 'semester', header: 'Sem' },
-          { key: 'internalMarks', header: 'Internal Marks', render: (s) => s.internalMarks.map((m) => `${m.subject}: ${m.marks}/${m.max}`).join(' · ') },
+          { key: 'internalMarks', header: 'Internal Marks', render: (s) => <InternalMarksGrid marks={s.internalMarks} /> },
           { key: 'gpa', header: 'GPA', render: (s) => s.gpa },
           { key: 'cgpa', header: 'CGPA', render: (s) => s.cgpa },
           { key: 'backlogs', header: 'Backlogs', render: (s) => <span className={s.backlogs > 0 ? 'text-rose-600 font-semibold' : ''}>{s.backlogs}</span> },
@@ -463,12 +1982,50 @@ function AcademicPerfView({ deptId }: { deptId: string }) {
   );
 }
 
+function InternalMarksGrid({ marks }: { marks: { subject: string; marks: number; max: number }[] }) {
+  const subjectLabel = (subject: string) => {
+    if (subject === 'Database Management Systems') return 'DBMS';
+    if (subject === 'Mathematics for Computer Applications') return 'Mathematics';
+    return subject;
+  };
+
+  const scoreTone = (marks: number, max: number) => {
+    const percentage = max > 0 ? (marks / max) * 100 : 0;
+    if (percentage >= 80) return 'bg-emerald-50 text-emerald-700';
+    if (percentage >= 60) return 'bg-amber-50 text-amber-700';
+    return 'bg-rose-50 text-rose-700';
+  };
+
+  if (marks.length === 0) return <span className="text-xs text-slate-400">—</span>;
+
+  return (
+    <div className="grid w-full max-w-[260px] grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs leading-4">
+      {marks.map((mark) => (
+        <Fragment key={`${mark.subject}-${mark.max}`}>
+          <span className="min-w-0 break-words text-left text-slate-600">{subjectLabel(mark.subject)}</span>
+          <span className={`justify-self-end whitespace-nowrap rounded px-1.5 py-0.5 font-semibold ${scoreTone(mark.marks, mark.max)}`}>
+            {mark.marks}/{mark.max}
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 function ProjectProgress({ deptId }: { deptId: string }) {
   const { data } = useStore();
-  const students = data.students.filter((s) => s.departmentId === deptId && s.projectTitle);
+  const [filterSem, setFilterSem] = useState('all');
+  const deptStudents = data.students.filter((s) => s.departmentId === deptId);
+  const semesters = [...new Set(deptStudents.map((s) => s.semester))].sort((a, b) => a - b);
+  const students = deptStudents.filter((s) => s.projectTitle && (filterSem === 'all' || s.semester === Number(filterSem)));
   return (
     <div>
-      <PageHeader title="Project / Assignment Progress" description="Student project tracking with guide and review status" />
+      <PageHeader title="Project / Assignment Progress" description="Student project tracking with guide and review status" action={
+        <select className="input w-auto" value={filterSem} onChange={(e) => setFilterSem(e.target.value)}>
+          <option value="all">All Semesters</option>
+          {semesters.map((semester) => <option key={semester} value={semester}>Sem {semester}</option>)}
+        </select>
+      } />
       <div className="grid lg:grid-cols-2 gap-4">
         {students.map((s) => (
           <div key={s.id} className="card p-5">
@@ -477,7 +2034,8 @@ function ProjectProgress({ deptId }: { deptId: string }) {
               <span className="text-sm font-semibold text-slate-900">{s.projectProgress}%</span>
             </div>
             <p className="text-sm text-slate-700 mb-1">{s.projectTitle}</p>
-            <p className="text-xs text-slate-500 mb-3">Guide: {s.projectGuide}</p>
+            <p className="text-xs text-slate-500 mb-1">{s.projectType ?? 'Project'} · {s.projectSubject ?? '—'} · Guide: {s.projectGuide}</p>
+            <p className="text-xs text-slate-500 mb-3">Status: {s.projectStatus ?? 'In Progress'} · Due: {s.projectDeadline ?? '—'} · Marks: {s.projectMarks ?? '—'} ({s.projectGrade ?? '—'})</p>
             <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-600 rounded-full" style={{ width: `${s.projectProgress}%` }} /></div>
           </div>
         ))}
@@ -528,7 +2086,7 @@ function TimetableEditor({ deptId }: { deptId: string }) {
           <h3 className="text-sm font-semibold text-slate-900 mb-3">New Timetable Entry</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <select className="input" value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })}><option value="A">Section A</option><option value="B">Section B</option></select>
-            <select className="input" value={form.semester} onChange={(e) => setForm({ ...form, semester: Number(e.target.value) })}>{[1,2,3,4,5,6,7,8].map((s) => <option key={s} value={s}>Sem {s}</option>)}</select>
+            <select className="input" value={form.semester} onChange={(e) => setForm({ ...form, semester: Number(e.target.value) })}>{[1,2,3,4,5,6].map((s) => <option key={s} value={s}>Sem {s}</option>)}</select>
             <select className="input" value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })}>{DAYS.map((d) => <option key={d} value={d}>{d}</option>)}</select>
             <select className="input" value={form.slot} onChange={(e) => setForm({ ...form, slot: e.target.value })}>{SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}</select>
             <select className="input" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}><option value="">Select subject...</option>{deptSubs.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
@@ -577,7 +2135,7 @@ function LabScheduling({ deptId }: { deptId: string }) {
         <div className="card p-5 mb-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <select className="input" value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })}><option value="A">Section A</option><option value="B">Section B</option></select>
-            <select className="input" value={form.semester} onChange={(e) => setForm({ ...form, semester: Number(e.target.value) })}>{[1,2,3,4,5,6,7,8].map((s) => <option key={s} value={s}>Sem {s}</option>)}</select>
+            <select className="input" value={form.semester} onChange={(e) => setForm({ ...form, semester: Number(e.target.value) })}>{[1,2,3,4,5,6].map((s) => <option key={s} value={s}>Sem {s}</option>)}</select>
             <select className="input" value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })}>{DAYS.map((d) => <option key={d} value={d}>{d}</option>)}</select>
             <select className="input" value={form.slot} onChange={(e) => setForm({ ...form, slot: e.target.value })}>{SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}</select>
             <select className="input" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}><option value="">Select subject...</option>{deptSubs.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}</select>

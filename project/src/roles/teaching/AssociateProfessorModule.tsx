@@ -3,6 +3,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react';
 /** Generic table row: stable id + arbitrary record fields. */
 type Rec = { id: string; [key: string]: any };
 import { useStore, deptName, staffName } from '../../store/StoreContext';
+import { getMenteesOfMentor } from '../hod/mentoringLogic';
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
@@ -716,10 +717,11 @@ function MentoringTab() {
   ]);
   const [openForm, setOpenForm] = useState(false);
   if (!currentUser) return null;
-  const mentees = data.students.filter((s) => s.projectGuide === currentUser.name);
-  const pool = mentees.length ? mentees : data.students.filter((s) => s.departmentId === currentUser.departmentId).slice(0, 6);
+  /* Mentees come from the central mentor–mentee allocations created by the HOD
+     (single source of truth — no duplicate dataset on the faculty side). */
+  const pool = getMenteesOfMentor(data, currentUser.id);
   const sel = pool.find((s) => s.id === selectedId) ?? pool[0];
-  if (!sel) return <PageHeader title="Mentoring" description="No mentees assigned yet" />;
+  if (!sel) return <PageHeader title="Mentoring" description="No mentees allocated yet — mentor allocations are managed by your HOD under Faculty Management → Mentoring Management" />;
   const mine = records.filter((r) => r.studentId === sel.id).sort((a, b) => b.date.localeCompare(a.date));
   const pendingAll = records.filter((r) => !r.done && new Date(r.followUp) <= new Date('2026-09-05'));
   return (
@@ -1130,7 +1132,7 @@ const SPEC_COMMITTEES: RecordSpec = {
   ],
 };
 const SEED_COMMITTEES: Rec[] = [
-  { id: 'cm1', name: 'Board of Studies — CSE', year: '2026–27', role: 'Member', dept: 'CSE', head: 'Dr. Lakshmi Menon (HOD)', status: 'Active' },
+  { id: 'cm1', name: 'Board of Studies — BCA', year: '2026–27', role: 'Member', dept: 'BCA', head: 'Priyanka (HOD)', status: 'Active' },
   { id: 'cm2', name: 'College Examination Cell', year: '2026–27', role: 'Secretary', dept: 'Institution-wide', head: 'Dr. S. Iyer (Controller of Examinations)', status: 'Active' },
   { id: 'cm3', name: 'Library Advisory Committee', year: '2025–26', role: 'Member', dept: 'Institution-wide', head: 'Librarian N. Rao', status: 'Concluded' },
 ];
@@ -1195,7 +1197,7 @@ const TASK_STATUSES = ['Assigned', 'In Progress', 'Completed', 'Pending'];
 function CommitteeActivitiesTab() {
   const [rows, setRows] = useState<Rec[]>([
     { id: 'ct1', committee: 'College Examination Cell', task: 'Prepare internal assessment timetable', date: '2026-08-02', status: 'In Progress', remarks: 'Draft circulated to HODs for review.' },
-    { id: 'ct2', committee: 'Board of Studies — CSE', task: 'Map course outcomes to program outcomes for two electives', date: '2026-05-23', status: 'Assigned', remarks: '' },
+    { id: 'ct2', committee: 'Board of Studies — BCA', task: 'Map course outcomes to program outcomes for two electives', date: '2026-05-23', status: 'Assigned', remarks: '' },
     { id: 'ct3', committee: 'College Examination Cell', task: 'Valuation slot allocation — end-semester practicals', date: '2026-06-19', status: 'Completed', remarks: 'Approved by Controller of Examinations.' },
   ]);
   const [adding, setAdding] = useState(false);

@@ -168,10 +168,10 @@ function UploadDocs() {
 
 function DeptFiles() {
   const files = [
-    { id: 'f1', name: 'CSE-Faculty-Records', category: 'Confidential', docs: 8, created: '2025-01-15' },
-    { id: 'f2', name: 'CSE-Student-Admissions', category: 'Admissions', docs: 24, created: '2025-06-01' },
-    { id: 'f3', name: 'CSE-Exam-Records', category: 'Examination', docs: 15, created: '2025-08-10' },
-    { id: 'f4', name: 'CSE-Inventory', category: 'Inventory', docs: 6, created: '2025-04-20' },
+    { id: 'f1', name: 'BCA-Faculty-Records', category: 'Confidential', docs: 8, created: '2025-01-15' },
+    { id: 'f2', name: 'BCA-Student-Admissions', category: 'Admissions', docs: 17, created: '2025-06-01' },
+    { id: 'f3', name: 'BCA-Exam-Records', category: 'Examination', docs: 15, created: '2025-08-10' },
+    { id: 'f4', name: 'BCA-Inventory', category: 'Inventory', docs: 6, created: '2025-04-20' },
   ];
   return (
     <div>

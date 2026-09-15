@@ -11,10 +11,11 @@ import {
   LayoutGrid, List, Calendar, Clock, FileCheck, ShieldAlert,
 } from 'lucide-react';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const DAY_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
-const SLOTS = ['09:00-10:00', '10:00-11:00', '11:30-12:30', '13:00-14:00', '14:00-15:00', '15:00-16:00'];
-const LUNCH_SLOT = '13:00-14:00';
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00', '15:00-16:00'];
+const LUNCH_SLOT = '12:00-13:00';
+const SATURDAY_MORNING_SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00'];
 const CLASS_TYPES = ['Theory', 'Practical', 'Tutorial', 'Seminar', 'Other'];
 const ACADEMIC_YEARS = ['2026–27', '2025–26', '2024–25'];
 const TEACHING_ROLES = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
@@ -39,15 +40,24 @@ function slotLabel(slot: string) {
   return `${start} – ${end}`;
 }
 
-function weekDates(weekOffset: number) {
-  // Base week anchored to a fixed Monday for deterministic demo dates
-  const base = new Date(2026, 7, 24); // Monday 24 Aug 2026
-  const monday = new Date(base);
-  monday.setDate(base.getDate() + weekOffset * 7);
-  return DAYS.map((_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return { day: DAYS[i], short: DAY_SHORT[i], date: d.getDate(), month: d.toLocaleString('en', { month: 'short' }) };
+function getMonday(date: Date) {
+  const monday = new Date(date);
+  const day = monday.getDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  monday.setDate(monday.getDate() - daysFromMonday);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function weekDates(weekOffset: number = 0) {
+  // Week is calculated automatically from the system's current date (Monday start)
+  const today = new Date();
+  const monday = getMonday(today);
+  monday.setDate(monday.getDate() + weekOffset * 7);
+  return DAYS.map((_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return { day: DAYS[index], short: DAY_SHORT[index], date: date.getDate(), month: date.toLocaleString('en', { month: 'short' }) };
   });
 }
 
@@ -382,7 +392,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
           <div className="min-w-[120px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">Semester</label>
             <select className="input" value={semester} onChange={(e) => setSemester(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => <option key={s} value={s}>Sem {s}</option>)}
+              {[1, 2, 3, 4, 5, 6].map((s) => <option key={s} value={s}>Sem {s}</option>)}
             </select>
           </div>
           <div className="min-w-[120px]">
@@ -455,10 +465,10 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => setWeekOffset((w) => w - 1)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"><ChevronLeft className="w-4 h-4" /></button>
-              <span className="text-sm font-medium text-slate-700">{dates[0].month} {dates[0].date} – {dates[4].month} {dates[4].date}</span>
+              <span className="text-sm font-medium text-slate-700">{dates[0].month} {dates[0].date} – {dates[5].month} {dates[5].date}</span>
               <button type="button" onClick={() => setWeekOffset((w) => w + 1)} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"><ChevronRight className="w-4 h-4" /></button>
             </div>
-            <span className="text-xs text-slate-400">Click a class to edit · Click an empty slot to add</span>
+            <span className="text-xs text-slate-400">Click a class to edit · Click an empty slot to add · Saturday half day (till 12:00 PM)</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px]">
@@ -480,6 +490,9 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
                     <tr key={slot} className={isLunch ? 'bg-slate-50/60' : ''}>
                       <td className="px-3 py-2 text-xs font-medium text-slate-500 whitespace-nowrap">{slotLabel(slot)}</td>
                       {dates.map((d) => {
+                        if (d.day === 'Saturday' && !SATURDAY_MORNING_SLOTS.includes(slot)) {
+                          return <td key={d.day} className="px-2 py-2 bg-slate-50/40" />;
+                        }
                         if (isLunch) {
                           return (
                             <td key={d.day} className="px-2 py-2 text-center">

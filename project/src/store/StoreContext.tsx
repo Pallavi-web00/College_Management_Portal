@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { AppData, Role, Staff, Student, Subject, Candidate, ApprovalRequest, Grievance, Message, TimetableEntry, Notification, Policy, Complaint, NonTeachingTask, Resource, ResourceAllocation, MaintenanceRequest, ResourceRequest, ResourceHistory, ExamSchedule, ExamAttendanceRecord, SubjectAllocation, AllocationHistory } from '../data/types';
+import type { AppData, Role, Staff, Student, Subject, Candidate, ApprovalRequest, Grievance, Message, TimetableEntry, Notification, Policy, Complaint, NonTeachingTask, Resource, ResourceAllocation, MaintenanceRequest, ResourceRequest, ResourceHistory, ExamSchedule, ExamAttendanceRecord, SubjectAllocation, AllocationHistory, MentorAllocation, MentoringHistory, AssignedTask, WorkloadSettings } from '../data/types';
 import { sampleData } from '../data/sampleData';
 
 interface StoreContextValue {
@@ -40,6 +40,11 @@ interface StoreContextValue {
   saveSubjectAllocation: (a: SubjectAllocation) => void;
   removeSubjectAllocation: (id: string) => void;
   addAllocationHistory: (h: AllocationHistory) => void;
+  saveMentorAllocation: (a: MentorAllocation) => void;
+  addMentoringHistory: (h: MentoringHistory) => void;
+  addAssignedTask: (t: AssignedTask) => void;
+  updateAssignedTask: (id: string, patch: Partial<AssignedTask>) => void;
+  updateWorkloadSettings: (patch: Partial<WorkloadSettings>) => void;
   addExam: (exam: ExamSchedule) => void;
   updateExam: (id: string, patch: Partial<ExamSchedule>) => void;
   saveExamAttendance: (examId: string, records: ExamAttendanceRecord[], markedBy: string) => void;
@@ -121,6 +126,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, subjectAllocations: d.subjectAllocations.filter((x) => x.id !== id) })),
     addAllocationHistory: (h) =>
       setData((d) => ({ ...d, allocationHistory: [h, ...d.allocationHistory] })),
+    saveMentorAllocation: (a) =>
+      setData((d) => ({ ...d, mentorAllocations: d.mentorAllocations.some((x) => x.id === a.id) ? d.mentorAllocations.map((x) => (x.id === a.id ? a : x)) : [a, ...d.mentorAllocations] })),
+    addMentoringHistory: (h) =>
+      setData((d) => ({ ...d, mentoringHistory: [h, ...d.mentoringHistory] })),
+    addAssignedTask: (t) =>
+      setData((d) => ({ ...d, assignedTasks: [t, ...d.assignedTasks] })),
+    updateAssignedTask: (id, patch) =>
+      setData((d) => ({ ...d, assignedTasks: d.assignedTasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+    updateWorkloadSettings: (patch) =>
+      setData((d) => ({ ...d, workloadSettings: { ...d.workloadSettings, ...patch } })),
     addExam: (exam) => setData((d) => ({ ...d, exams: [exam, ...d.exams] })),
     updateExam: (id, patch) => setData((d) => ({ ...d, exams: d.exams.map((e) => e.id === id ? { ...e, ...patch } : e) })),
     saveExamAttendance: (examId, records, markedBy) => setData((d) => ({

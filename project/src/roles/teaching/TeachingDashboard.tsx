@@ -1,13 +1,15 @@
-import { useStore, deptName, staffName, roleLabels } from '../../store/StoreContext';
+import { useStore, deptName, deptCode, staffName, roleLabels } from '../../store/StoreContext';
 import { classLabel, semShort, subjectTypeLabel, resourceShortLabel, resourceEffectiveStatus } from '../hod/subjectAllocationLogic';
-import type { SubjectAllocation } from '../../data/types';
+import { getMenteesOfMentor } from '../hod/mentoringLogic';
+import { WORK_CATEGORY_LABELS, TASK_PRIORITY_STYLES, formatIso } from '../hod/workloadLogic';
+import type { SubjectAllocation, AssignedTask } from '../../data/types';
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
 import { Placeholder, RegisterComplaintView, LeaveManagementView } from '../../components/SharedViews';
 import { MyResources } from '../../components/ResourceViews';
 import { Modal } from '../../components/Modal';
-import { BookOpen, GraduationCap, FlaskConical, ScrollText, Users, Calendar, Award, FileCheck, FileText, Beaker, Users2, Send, Plus, CheckSquare, XCircle, ClipboardCheck } from 'lucide-react';
+import { BookOpen, GraduationCap, FlaskConical, ScrollText, Users, Calendar, Award, FileCheck, FileText, Beaker, Users2, Send, Plus, CheckSquare, XCircle, ClipboardCheck, ClipboardList, TrendingUp, AlertTriangle, UserCheck, Clock } from 'lucide-react';
 import { useState } from 'react';
 import type { Student, Subject, PhdScholar } from '../../data/types';
 import { TeachingModule, ResearchModule, CommitteeModule } from './AssociateProfessorModule';
@@ -22,6 +24,7 @@ export function TeachingDashboard({ activeMenu }: { activeMenu: string }) {
   if (activeMenu.endsWith('-timetable')) return <MyTimetable />;
   if (activeMenu.endsWith('-class')) return <MyClass />;
   if (activeMenu.endsWith('-resources')) return <MyResources />;
+  if (activeMenu.endsWith('-tasks')) return <MyAssignedTasks />;
   if (activeMenu.endsWith('-complaint')) return <RegisterComplaintView />;
   if (activeMenu.endsWith('-apply-leave')) return <LeaveManagementView />;
 
@@ -200,6 +203,7 @@ function MyClassDetailModal({
   const resources = alloc.resourceIds.map((id) => data.resources.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => !!r);
   const students = data.students.filter((s) => s.departmentId === subject.departmentId && s.semester === subject.semester && s.section === section && s.status === 'active');
   const ttEntries = data.timetable.filter((t) => t.published && t.facultyId === currentUser.id && t.subject === subject.name && t.section === section && t.semester === subject.semester);
+  const assignments = data.students.filter((s) => s.departmentId === subject.departmentId && s.projectSubject === subject.name && s.projectGuide === currentUser.name);
 
   return (
     <Modal open onClose={onClose} title={`${subject.name} — ${label}`} subtitle={`${subject.code} · ${semShort(subject.semester)} · ${subjectTypeLabel(subject.type)}`} size="xl">
@@ -236,7 +240,7 @@ function MyClassDetailModal({
           </div>
           <div className="card p-3.5">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Assignments</p>
-            <p className="text-sm text-slate-400 mt-2">No assignments published yet.</p>
+            {assignments.length === 0 ? <p className="text-sm text-slate-400 mt-2">No assignments published yet.</p> : <div className="mt-2 space-y-1.5">{Array.from(new Map(assignments.map((a) => [a.projectTitle, a])).values()).slice(0, 3).map((a) => <div key={a.projectTitle} className="text-xs text-slate-600"><span className="font-medium text-slate-800">{a.projectTitle}</span><span className="block">Due {a.projectDeadline} · {a.projectStatus}</span></div>)}</div>}
           </div>
           <div className="card p-3.5">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Assessments</p>
@@ -520,22 +524,46 @@ function CoreTeaching() {
 }
 
 function MentoringView() {
+  /* Faculty-side "My Mentees" — reads the SAME central mentor–mentee allocations
+     managed by the HOD in Mentoring Management (single source of truth). Faculty
+     see only the students allocated to them, never other mentors' mentees. */
   const { currentUser, data } = useStore();
+  const [selected, setSelected] = useState<Student | null>(null);
   if (!currentUser) return null;
-  const mentees = data.students.filter((s) => s.projectGuide === currentUser.name || s.departmentId === currentUser.departmentId).slice(0, 6);
+  const mentees = getMenteesOfMentor(data, currentUser.id);
+  const avgAtt = mentees.length ? Math.round(mentees.reduce((a, s) => a + s.attendancePct, 0) / mentees.length) : 0;
+  const avgGpa = mentees.length ? (mentees.reduce((a, s) => a + s.gpa, 0) / mentees.length).toFixed(1) : '—';
+  const needAttention = mentees.filter((s) => s.attendancePct < 75 || s.backlogs > 0).length;
   return (
     <div>
-      <PageHeader title="Mentoring" description="Assigned mentee students and mentoring sessions" />
+      <PageHeader title="My Mentees" description={`Students allocated to you for mentoring · ${deptName(data, currentUser.departmentId)}`} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="My Mentees" value={mentees.length} icon={<UserCheck className="w-5 h-5" />} accent="blue" />
+        <StatCard label="Avg Attendance" value={mentees.length ? `${avgAtt}%` : '—'} icon={<TrendingUp className="w-5 h-5" />} accent="emerald" />
+        <StatCard label="Avg GPA" value={avgGpa} icon={<Award className="w-5 h-5" />} accent="indigo" />
+        <StatCard label="Need Attention" value={needAttention} icon={<AlertTriangle className="w-5 h-5" />} accent={needAttention ? 'amber' : 'slate'} />
+      </div>
       <DataTable
         rows={mentees}
+        emptyMessage="No mentees allocated yet — mentor allocations are managed by your HOD under Faculty Management → Mentoring Management"
         columns={[
           { key: 'name', header: 'Mentee', render: (s) => <span className="font-medium">{s.name}</span> },
           { key: 'rollNo', header: 'Roll No' },
-          { key: 'semester', header: 'Sem' },
-          { key: 'gpa', header: 'GPA' },
-          { key: 'attendancePct', header: 'Attendance' },
+          { key: 'semester', header: 'Semester', render: (s) => semShort(s.semester) },
+          { key: 'section', header: 'Class', render: (s) => `${deptCode(data, s.departmentId)}-${s.section}` },
+          { key: 'status', header: 'Status', render: () => <StatusBadge status="active" /> },
+          { key: 'action', header: 'Action', render: (s) => (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              onClick={() => setSelected(s)}
+            >
+              View
+            </button>
+          ) },
         ]}
       />
+      <StudentDetailModal student={selected} open={!!selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
@@ -597,8 +625,8 @@ function TaLab() {
 
 function Tutorials() {
   const tutorials = [
-    { id: 't1', group: 'CSE-A Sem-3', subject: 'Data Structures', schedule: 'Wed 14:00-15:00', students: 30, attendance: 92 },
-    { id: 't2', group: 'CSE-A Sem-2', subject: 'Python Programming', schedule: 'Fri 15:00-16:00', students: 28, attendance: 88 },
+    { id: 't1', group: 'BCA-A Sem-3', subject: 'Data Structures', schedule: 'Wed 14:00-15:00', students: 17, attendance: 92 },
+    { id: 't2', group: 'BCA-A Sem-2', subject: 'Python Programming', schedule: 'Fri 15:00-16:00', students: 17, attendance: 88 },
   ];
   return (
     <div>
@@ -666,6 +694,120 @@ function ResearchSupport() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+/* ============================================================
+ * My Assigned Tasks — tasks assigned by the HOD via the
+ * Workload page appear here automatically, with status updates.
+ * ============================================================ */
+function MyAssignedTasks() {
+  const { data, currentUser, updateAssignedTask } = useStore();
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  if (!currentUser) return null;
+
+  const tasks = data.assignedTasks.filter((t) => t.facultyId === currentUser.id);
+  const categories = [...new Set(tasks.map((t) => t.category))];
+  const filtered = tasks.filter(
+    (t) =>
+      (statusFilter === 'all' || t.status === statusFilter) &&
+      (categoryFilter === 'all' || t.category === categoryFilter)
+  );
+
+  const setStatus = (id: string, status: AssignedTask['status']) => updateAssignedTask(id, { status });
+
+  return (
+    <div>
+      <PageHeader title="Assigned Tasks" description="Tasks assigned by the HOD — track and update your status" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Tasks" value={tasks.length} icon={<ClipboardCheck className="w-5 h-5" />} accent="blue" />
+        <StatCard label="Pending" value={tasks.filter((t) => t.status === 'pending').length} icon={<Clock className="w-5 h-5" />} accent="amber" />
+        <StatCard label="In Progress" value={tasks.filter((t) => t.status === 'in-progress').length} icon={<TrendingUp className="w-5 h-5" />} accent="indigo" />
+        <StatCard label="Completed" value={tasks.filter((t) => t.status === 'completed').length} icon={<CheckSquare className="w-5 h-5" />} accent="emerald" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="all">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="in-progress">In Progress</option>
+          <option value="completed">Completed</option>
+          <option value="on-hold">On Hold</option>
+        </select>
+        <select className="input w-auto" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+          <option value="all">All Categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>{WORK_CATEGORY_LABELS[c] ?? c}</option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="card p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-slate-100 mx-auto flex items-center justify-center mb-4">
+            <ClipboardList className="w-7 h-7 text-slate-400" />
+          </div>
+          <p className="text-sm font-medium text-slate-900">No assigned tasks</p>
+          <p className="text-xs text-slate-500 mt-1">Tasks assigned by the HOD from the Workload page will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((t) => {
+            const overdue = t.deadline && t.status !== 'completed' && t.deadline < new Date().toISOString().slice(0, 10);
+            return (
+              <div key={t.id} className="card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-semibold text-slate-900">{t.title}</h4>
+                      <span className={`badge ${TASK_PRIORITY_STYLES[t.priority] ?? 'bg-slate-100 text-slate-600'} capitalize`}>{t.priority}</span>
+                      <span className="badge bg-slate-100 text-slate-600">{WORK_CATEGORY_LABELS[t.category] ?? t.category}</span>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-1">{t.description || 'No description provided.'}</p>
+                    {t.remarks && <p className="text-xs text-slate-500 mt-1 italic">Remarks: {t.remarks}</p>}
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <StatusBadge status={t.status} />
+                    <span className="text-xs font-semibold text-slate-700">{t.allocatedHours} hr{t.allocatedHours > 1 ? 's' : ''} allocated</span>
+                  </div>
+                </div>
+<div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="text-slate-500">Assigned by</p>
+                    <p className="font-medium text-slate-800 mt-0.5">{staffName(data, t.assignedBy)}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="text-slate-500">Assigned date</p>
+                    <p className="font-medium text-slate-800 mt-0.5">{formatIso(t.assignedDate)}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="text-slate-500">Workload date</p>
+                    <p className="font-medium text-slate-800 mt-0.5">{formatIso(t.date)}</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="text-slate-500">Deadline</p>
+                    <p className={`font-medium mt-0.5 ${overdue ? 'text-rose-600' : 'text-slate-800'}`}>{formatIso(t.deadline)}{overdue ? ' · overdue' : ''}</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">Update status:</span>
+                  {(['pending', 'in-progress', 'completed', 'on-hold'] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStatus(t.id, s)}
+                      className={`badge transition-colors ${t.status === s ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} capitalize`}
+                    >
+                      {s === 'in-progress' ? 'In Progress' : s === 'on-hold' ? 'On Hold' : s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

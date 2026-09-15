@@ -4,7 +4,7 @@ import { DataTable, StatusBadge } from './DataTable';
 import { PageHeader, SectionTitle } from './PageHeader';
 import { StatCard } from './StatCard';
 import { StudentDetailModal, StaffDetailModal } from './DetailModals';
-import { Search, Users, GraduationCap, CheckSquare, XCircle, RotateCcw, MessageSquare, FileText, Download, Mail, ShieldCheck, Send, Calendar, AlertCircle, TrendingUp } from 'lucide-react';
+import { Search, Users, GraduationCap, CheckSquare, XCircle, RotateCcw, MessageSquare, FileText, Download, Mail, ShieldCheck, Send, Calendar, AlertCircle, BookOpen, Clock, TrendingUp } from 'lucide-react';
 import type { Student, Staff, ApprovalRequest, Message, Role, Complaint } from '../data/types';
 
 export function StudentsDirectory({ scopeDept, editable, showStats = true, classFilter = false, courseFilter = false, showAttendanceStats = false, extraStats }: { scopeDept?: string; editable?: boolean; showStats?: boolean; classFilter?: boolean; courseFilter?: boolean; showAttendanceStats?: boolean; extraStats?: ReactNode }) {
@@ -96,40 +96,245 @@ export function StaffDirectory({ scopeDept, roles, editable, title = 'Staff Dire
   const { data, updateStaff } = useStore();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Staff | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [designationFilter, setDesignationFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | Staff['status']>('all');
+
+  const allDesignations = Array.from(new Set(data.staff.map((s) => s.designation))).sort();
 
   const rows = data.staff.filter((s) =>
     (!scopeDept || s.departmentId === scopeDept) &&
     (!roles || roles.includes(s.role)) &&
-    s.name.toLowerCase().includes(query.toLowerCase())
+    s.name.toLowerCase().includes(query.toLowerCase()) &&
+    (designationFilter === 'all' || s.designation === designationFilter) &&
+    (statusFilter === 'all' || s.status === statusFilter)
   );
 
+  const avgAttendance = rows.length ? Math.round(rows.reduce((sum, s) => sum + s.attendancePct, 0) / rows.length) : 0;
+  const avgEffectiveness = rows.length ? Math.round(rows.reduce((sum, s) => sum + Math.min(100, Math.round((s.performanceRating / 5) * 100)), 0) / rows.length) : 0;
+  const totalPending = rows.reduce((sum, s) => sum + s.pendingWork, 0);
+  const teachingFaculty = rows.filter((s) => s.subjects.length > 0).length;
+
+  const getSyllabusAverage = (staffMember: Staff) => {
+    const staffSubjects = data.subjects.filter((subject) => subject.facultyId === staffMember.id);
+    if (!staffSubjects.length) return 0;
+    return Math.round(staffSubjects.reduce((sum, subject) => sum + subject.syllabusCompletion, 0) / staffSubjects.length);
+  };
+
+  const metricStyles = {
+    low: 'bg-rose-50 text-rose-700 border border-rose-100',
+    medium: 'bg-amber-50 text-amber-700 border border-amber-100',
+    healthy: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+    neutral: 'bg-slate-100 text-slate-700 border border-slate-200',
+  };
+
+  const cardHeader = title === 'Faculty List' || title === 'Department Faculty' ? 'Faculty List' : title;
+  const cardDescription = title === 'Faculty List' || title === 'Department Faculty'
+    ? 'View faculty details, attendance and performance.'
+    : scopeDept ? `${deptName(data, scopeDept)}` : 'All staff';
+
   return (
-    <div>
-      <PageHeader title={title} description={scopeDept ? `${deptName(data, scopeDept)}` : 'All staff'} action={
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-white border border-slate-300 rounded-lg px-3 py-2 w-64">
+    <div className="space-y-6">
+      <PageHeader title={cardHeader} description={cardDescription} action={
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 w-64 shadow-sm">
             <Search className="w-4 h-4 text-slate-400" />
-            <input className="bg-transparent border-0 outline-0 text-sm ml-2 flex-1" placeholder="Search by name..." value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="bg-transparent border-0 outline-0 text-sm ml-2 flex-1 placeholder:text-slate-400" placeholder="Search faculty..." value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
+          <select className="input w-auto" value={designationFilter} onChange={(e) => setDesignationFilter(e.target.value)}>
+            <option value="all">All Designations</option>
+            {allDesignations.map((designation) => (
+              <option key={designation} value={designation}>{designation}</option>
+            ))}
+          </select>
+          <select className="input w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | Staff['status'])}>
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="on-leave">On Leave</option>
+            <option value="inactive">Inactive</option>
+          </select>
           {extraAction}
         </div>
       } />
-      <DataTable
-        rows={rows}
-        columns={[
-          { key: 'id', header: 'ID', render: (s) => s.id.toUpperCase() },
-          { key: 'name', header: 'Name', render: (s) => <span className="font-medium text-slate-900">{s.name}</span> },
-          { key: 'designation', header: 'Designation' },
-          ...(showAttendance
-            ? [{ key: 'attendancePct', header: 'Attendance', render: (s: Staff) => <span className={s.attendancePct < 75 ? 'text-rose-600 font-semibold' : ''}>{s.attendancePct}%</span> }]
-            : [{ key: 'departmentId', header: 'Dept', render: (s: Staff) => deptCode(data, s.departmentId) }]),
-          { key: 'subjects', header: 'Subjects', render: (s) => s.subjects.length || '—' },
-          { key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} /> },
-          { key: 'email', header: 'Email' },
-        ]}
-        onRowDoubleClick={(s) => setSelected(s)}
-      />
-      <p className="text-xs text-slate-400 mt-3">Double-click a row to view full profile.</p>
+
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-2">
+        <div className="card px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Total Faculty</span>
+            <span className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Users className="w-4 h-4" /></span>
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{rows.length}</p>
+        </div>
+        <div className="card px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Teaching Faculty</span>
+            <span className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><BookOpen className="w-4 h-4" /></span>
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{teachingFaculty}</p>
+        </div>
+        <div className="card px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Avg. Attendance</span>
+            <span className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><CheckSquare className="w-4 h-4" /></span>
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{avgAttendance}%</p>
+        </div>
+        <div className="card px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Avg. Teaching Effectiveness</span>
+            <span className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center"><TrendingUp className="w-4 h-4" /></span>
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{avgEffectiveness}%</p>
+        </div>
+        <div className="card px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Pending Work</span>
+            <span className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><Clock className="w-4 h-4" /></span>
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-slate-900">{totalPending}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <div className="card p-4 text-center">
+            <p className="text-sm text-slate-500">No faculty matches the current search or filter.</p>
+          </div>
+        ) : rows.map((staffMember) => {
+          const effectiveness = Math.min(100, Math.round((staffMember.performanceRating / 5) * 100));
+          const syllabusAverage = getSyllabusAverage(staffMember);
+          const attendanceTone = staffMember.attendancePct >= 85 ? metricStyles.healthy : staffMember.attendancePct >= 75 ? metricStyles.medium : metricStyles.low;
+          const effectivenessTone = effectiveness >= 80 ? metricStyles.healthy : effectiveness >= 70 ? metricStyles.medium : metricStyles.low;
+          const ratingTone = staffMember.feedbackScore >= 4.2 ? metricStyles.healthy : staffMember.feedbackScore >= 3.5 ? metricStyles.medium : metricStyles.low;
+          const pendingTone = staffMember.pendingWork <= 2 ? metricStyles.healthy : staffMember.pendingWork <= 6 ? metricStyles.medium : metricStyles.low;
+          const expanded = expandedId === staffMember.id;
+
+          return (
+            <div key={staffMember.id} className={`card overflow-hidden transition-all duration-200 ${expanded ? 'shadow-md border-slate-200' : 'shadow-sm border-slate-200'}`}>
+              <div className="flex flex-col xl:flex-row xl:items-center gap-4 p-4">
+                <div className="flex items-center gap-3 min-w-0 xl:flex-1">
+                  <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-100 to-blue-100 text-indigo-700 flex items-center justify-center font-semibold text-base shadow-sm">
+                    {staffMember.name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold text-slate-900 truncate">{staffMember.name}</p>
+                    <p className="text-sm text-slate-500">{staffMember.designation}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 flex-1">
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-1 py-2">
+                    <div className="flex items-center justify-between gap-1 mb-1 min-w-0">
+                      <span className="min-w-0 truncate text-[11px] text-slate-500 uppercase tracking-wide">Attendance</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${
+                        staffMember.attendancePct >= 85 
+                        ? 'bg-emerald-500' 
+                        : staffMember.attendancePct >= 75 
+                        ? 'bg-amber-500' 
+                        : 'bg-rose-500'
+                        }`} 
+                        style={{ width: `${staffMember.attendancePct}%` }} 
+                      />
+                    </div>
+                    <span className={`inline-flex mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${attendanceTone}`}>
+                      {staffMember.attendancePct}%
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-1 py-2">
+                    <div className="flex items-center justify-between mb-1 min-w-0">
+                      <span className="min-w-0 truncate text-[11px] text-slate-500 uppercase tracking-wide">Effectiveness</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${effectiveness >= 80 ? 'bg-emerald-500' : effectiveness >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${effectiveness}%` }} />
+                    </div>
+                    <span className={`inline-flex mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${effectivenessTone}`}>{effectiveness}%</span>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-1 py-2">
+                    <span className="text-[11px] text-slate-500 uppercase tracking-wide">Rating</span>
+                    <span className={`inline-flex mt-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${ratingTone}`}>★</span>
+                    <p className="mt-1.5 flex items-center justify-between text-sm font-semibold text-slate-900">
+                      {staffMember.feedbackScore.toFixed(1)}
+                      
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-1 py-2">
+                    <span className="text-[11px] text-slate-500 uppercase tracking-wide">Pending Work</span>
+                    <span>       </span>
+                    <span className={`mt-1.5 text-sm font-semibold ${staffMember.pendingWork > 5 ? 'text-amber-700' : 'text-slate-900'}`}>{staffMember.pendingWork}</span>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-1 py-2">
+                    <span className="text-[11px] text-slate-500 uppercase tracking-wide">Avg. Syllabus</span>
+                    <p className="mt-1.5 text-sm font-semibold text-slate-900">{syllabusAverage}%</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 xl:justify-end">
+                  <button className="btn-secondary text-xs" onClick={() => setSelected(staffMember)}>View profile</button>
+                  <button
+                    type="button"
+                    aria-label={expanded ? 'Collapse faculty details' : 'Expand faculty details'}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                    onClick={() => setExpandedId(expanded ? null : staffMember.id)}
+                  >
+                    <svg className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {expanded && (
+                <div className="border-t border-slate-200 bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">ID</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Subject Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Class</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Syllabus Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.subjects.filter((s) => s.facultyId === staffMember.id).length > 0 ? (
+                          data.subjects.filter((s) => s.facultyId === staffMember.id).map((subject) => (
+                            <tr key={subject.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3 font-medium text-slate-900">{subject.code}</td>
+                              <td className="px-4 py-3 text-slate-700">{subject.name}</td>
+                              <td className="px-4 py-3 text-slate-700">{subject.classes.join(', ')}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden max-w-xs">
+                                    <div className={`h-full rounded-full ${subject.syllabusCompletion >= 80 ? 'bg-emerald-500' : subject.syllabusCompletion >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${subject.syllabusCompletion}%` }} />
+                                  </div>
+                                  <span className={`text-xs font-medium min-w-max ${subject.syllabusCompletion >= 80 ? 'text-emerald-700' : subject.syllabusCompletion >= 70 ? 'text-amber-700' : 'text-rose-700'}`}>{subject.syllabusCompletion}%</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-6 text-center text-sm text-slate-500">
+                              No subjects assigned
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       <StaffDetailModal staff={selected} open={!!selected} onClose={() => setSelected(null)} editable={editable} onSave={(patch) => { if (selected) { updateStaff(selected.id, patch); setSelected({ ...selected, ...patch }); } }} />
     </div>
   );
@@ -287,19 +492,31 @@ const rows = data.approvals.filter((a) =>
   );
 }
 
-export function GrievancesPanel({ scopeDept, canAssign }: { scopeDept?: string; canAssign?: boolean }) {
+export function GrievancesPanel({ scopeDept, canAssign, semesterFilter = false }: { scopeDept?: string; canAssign?: boolean; semesterFilter?: boolean }) {
   const { data, updateGrievance } = useStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [assignTo, setAssignTo] = useState('');
   const [resolution, setResolution] = useState('');
+  const [filterSem, setFilterSem] = useState('all');
 
-  const rows = data.grievances.filter((g) => !scopeDept || g.departmentId === scopeDept);
+  const scopedStudents = data.students.filter((s) => !scopeDept || s.departmentId === scopeDept);
+  const semesters = [...new Set(scopedStudents.map((s) => s.semester))].sort((a, b) => a - b);
+  const rows = data.grievances.filter((g) => {
+    if (scopeDept && g.departmentId !== scopeDept) return false;
+    if (!semesterFilter || filterSem === 'all') return true;
+    return data.students.find((s) => s.id === g.studentId)?.semester === Number(filterSem);
+  });
   const selected = rows.find((g) => g.id === selectedId);
   const faculty = data.staff.filter((s) => (!scopeDept || s.departmentId === scopeDept) && ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'hod'].includes(s.role));
 
   return (
     <div>
-      <PageHeader title="Student Grievances" description="Review, assign, and resolve student grievances" />
+      <PageHeader title="Student Grievances" description="Review, assign, and resolve student grievances" action={semesterFilter ? (
+        <select className="input w-auto" value={filterSem} onChange={(e) => setFilterSem(e.target.value)}>
+          <option value="all">All Semesters</option>
+          {semesters.map((semester) => <option key={semester} value={semester}>Sem {semester}</option>)}
+        </select>
+      ) : undefined} />
       <DataTable
         rows={rows}
         columns={[
