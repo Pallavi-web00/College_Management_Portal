@@ -2,7 +2,8 @@ import { useStore, deptName, deptCode, roleLabels } from '../../store/StoreConte
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
-import { StaffDirectory, RegisterComplaintView, InboxView } from '../../components/SharedViews';
+import { StaffDirectory, RegisterComplaintView, LeaveManagementView } from '../../components/SharedViews';
+import { LabMaintenanceRequests } from '../../components/ResourceViews';
 import { Users, Mail, Send, FileText, FolderOpen, Cpu, Beaker, Plus, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
 import type { Staff, Role } from '../../data/types';
@@ -12,23 +13,25 @@ export function NonTeachingDashboard({ activeMenu }: { activeMenu: string }) {
   const { currentUser } = useStore();
   if (!currentUser) return null;
 
-  if (currentUser.role === 'office-superintendent') {
+if (currentUser.role === 'office-superintendent') {
     switch (activeMenu) {
+      case 'os-apply-leave': return <LeaveManagementView />;
       case 'os-directory': return <StaffDirectory scopeDept={currentUser.departmentId} roles={['office-superintendent', 'lab-assistant']} title="Staff Directory" editable />;
       case 'os-letters': return <ReceiveLetters />;
       case 'os-send': return <SendComms />;
       case 'os-docs': return <UploadDocs />;
       case 'os-files': return <DeptFiles />;
-      case 'os-inbox': return <InboxView recipientRole={currentUser.role} recipientName={currentUser.name} />;
       case 'os-complaint': return <RegisterComplaintView />;
       default: return <OfficeHome />;
     }
   }
 
-  if (currentUser.role === 'lab-assistant') {
+if (currentUser.role === 'lab-assistant') {
     switch (activeMenu) {
+      case 'la-apply-leave': return <LeaveManagementView />;
       case 'la-equipment': return <Equipment />;
       case 'la-session': return <SessionAssist />;
+      case 'la-maintenance': return <LabMaintenanceRequests />;
       case 'la-complaint': return <RegisterComplaintView />;
       default: return <LabHome />;
     }

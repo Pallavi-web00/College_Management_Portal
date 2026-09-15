@@ -5,6 +5,7 @@ interface StatCardProps {
   trend?: string;
   trendUp?: boolean;
   accent?: 'slate' | 'blue' | 'emerald' | 'amber' | 'rose' | 'indigo';
+  compact?: boolean;
 }
 
 const accentMap = {
@@ -16,15 +17,15 @@ const accentMap = {
   indigo: 'bg-indigo-50 text-indigo-700',
 };
 
-export function StatCard({ label, value, icon, trend, trendUp, accent = 'slate' }: StatCardProps) {
+export function StatCard({ label, value, icon, trend, trendUp, accent = 'slate', compact = false }: StatCardProps) {
   return (
-    <div className="card card-hover p-5">
-      <div className="flex items-start justify-between">
+    <div className={`card card-hover ${compact ? 'p-3 sm:p-4' : 'p-5'}`}>
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-500 font-medium">{label}</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+          <p className={`text-slate-500 font-medium ${compact ? 'text-xs sm:text-sm' : 'text-sm'}`}>{label}</p>
+          <p className={`font-bold text-slate-900 mt-1 ${compact ? 'text-xl' : 'text-2xl'}`}>{value}</p>
         </div>
-        {icon && <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${accentMap[accent]}`}>{icon}</div>}
+        {icon && <div className={`${compact ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-10 h-10'} rounded-lg flex items-center justify-center ${accentMap[accent]}`}>{icon}</div>}
       </div>
       {trend && (
         <p className={`text-xs mt-3 font-medium ${trendUp ? 'text-emerald-600' : 'text-rose-600'}`}>{trend}</p>

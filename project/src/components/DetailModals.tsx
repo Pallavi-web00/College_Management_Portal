@@ -56,11 +56,12 @@ export function StaffDetailModal({ staff, open, onClose, editable, onSave }: {
           <Field label="Address" value={staff.address} />
         </dl>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="card p-3 text-center"><p className="text-xs text-slate-500">Attendance</p><p className="text-lg font-bold text-slate-900">{staff.attendancePct}%</p></div>
           <div className="card p-3 text-center"><p className="text-xs text-slate-500">Feedback</p><p className="text-lg font-bold text-slate-900">{staff.feedbackScore || '—'}/5</p></div>
           <div className="card p-3 text-center"><p className="text-xs text-slate-500">Rating</p><p className="text-lg font-bold text-slate-900">{staff.performanceRating || '—'}/5</p></div>
           <div className="card p-3 text-center"><p className="text-xs text-slate-500">Pending Work</p><p className="text-lg font-bold text-slate-900">{staff.pendingWork}</p></div>
+          <div className="card p-3 text-center"><p className="text-xs text-slate-500">Avg Syllabus</p><p className="text-lg font-bold text-slate-900">{subjects.length ? `${Math.round(subjects.reduce((a, s) => a + s.syllabusCompletion, 0) / subjects.length)}%` : '—'}</p></div>
         </div>
 
         {subjects.length > 0 && (
@@ -87,11 +88,6 @@ export function StaffDetailModal({ staff, open, onClose, editable, onSave }: {
                   </div>
                 );
               })}
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <div className="card p-3 text-center"><p className="text-xs text-slate-500">Avg Syllabus</p><p className="text-lg font-bold text-slate-900">{subjects.length ? Math.round(subjects.reduce((a, s) => a + s.syllabusCompletion, 0) / subjects.length) : 0}%</p></div>
-              <div className="card p-3 text-center"><p className="text-xs text-slate-500">Feedback</p><p className="text-lg font-bold text-slate-900">{staff.feedbackScore || '—'}/5</p></div>
-              <div className="card p-3 text-center"><p className="text-xs text-slate-500">Rating</p><p className="text-lg font-bold text-slate-900">{staff.performanceRating || '—'}/5</p></div>
             </div>
           </div>
         )}

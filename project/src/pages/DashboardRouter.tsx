@@ -5,7 +5,7 @@ import { HodDashboard } from '../roles/hod/HodDashboard';
 import { TeachingDashboard } from '../roles/teaching/TeachingDashboard';
 import { NonTeachingDashboard } from '../roles/nonteaching/NonTeachingDashboard';
 
-export function DashboardRouter({ activeMenu }: { activeMenu: string }) {
+export function DashboardRouter({ activeMenu, onNavigate }: { activeMenu: string; onNavigate?: (menuId: string) => void }) {
   const { currentUser } = useStore();
   if (!currentUser) return null;
 
@@ -15,7 +15,7 @@ export function DashboardRouter({ activeMenu }: { activeMenu: string }) {
     case 'dean':
       return <DeanDashboard activeMenu={activeMenu} />;
     case 'hod':
-      return <HodDashboard activeMenu={activeMenu} />;
+      return <HodDashboard activeMenu={activeMenu} onNavigate={onNavigate} />;
     case 'professor':
     case 'associate-professor':
     case 'assistant-professor':

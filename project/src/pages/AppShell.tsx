@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { GraduationCap, LogOut, Bell, Search, ChevronDown, Menu, X } from 'lucide-react';
 import { useStore, roleLabels, deptName } from '../store/StoreContext';
 import { menus } from '../config/menus';
@@ -7,8 +7,16 @@ import { DashboardRouter } from './DashboardRouter';
 export function AppShell() {
   const { currentUser, data, logout, notifications, markNotificationRead } = useStore();
   const [activeMenu, setActiveMenu] = useState<string>('');
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+
+  // Close the navigation drawer with the Escape key
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsSidebarOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSidebarOpen]);
 
   const userMenus = useMemo(
     () => (currentUser ? menus[currentUser.role] : []),
@@ -18,7 +26,7 @@ export function AppShell() {
   // default active menu = first item
   const currentActive = activeMenu || userMenus[0]?.items[0]?.id || '';
 
-  const userNotifs = notifications.filter((n) => currentUser && n.audience.includes(currentUser.role));
+  const userNotifs = notifications.filter((n) => currentUser && n.audience.includes(currentUser.role) && (!n.targetUserIds || n.targetUserIds.includes(currentUser.id)));
   const unreadCount = userNotifs.filter((n) => !n.read).length;
 
   if (!currentUser) return null;
@@ -27,8 +35,8 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 z-40 h-screen w-64 bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col transition-transform ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      {/* Sidebar — collapsible navigation drawer, hidden by default on all screen sizes */}
+      <aside className={`fixed top-16 bottom-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full'}`}>
         <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-800">
           <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
             <GraduationCap className="w-5 h-5 text-white" />
@@ -47,10 +55,11 @@ export function AppShell() {
                 {g.items.map((item) => {
                   const Icon = item.icon;
                   const active = currentActive === item.id;
+
                   return (
                     <button
                       key={item.id}
-                      onClick={() => { setActiveMenu(item.id); setMobileOpen(false); }}
+                      onClick={() => { setActiveMenu(item.id); setIsSidebarOpen(false); }}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                         active ? 'bg-white/10 text-white font-medium' : 'text-slate-400 hover:text-white hover:bg-white/5'
                       }`}
@@ -72,16 +81,25 @@ export function AppShell() {
         </div>
       </aside>
 
-      {mobileOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)} />}
+      {/* Overlay — fades in/out behind the drawer; click to close */}
+      <div
+        className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setIsSidebarOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200">
+        <header className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200">
           <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-slate-100">
-                <Menu className="w-5 h-5 text-slate-700" />
+              <button
+                onClick={() => setIsSidebarOpen((v) => !v)}
+                aria-label={isSidebarOpen ? 'Close navigation' : 'Open navigation'}
+                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                {isSidebarOpen ? <X className="w-5 h-5 text-slate-700" /> : <Menu className="w-5 h-5 text-slate-700" />}
               </button>
               <div className="hidden sm:block">
                 <p className="text-xs text-slate-500">{deptName(data, currentUser.departmentId)}</p>
@@ -116,11 +134,12 @@ export function AppShell() {
                         ) : userNotifs.map((n) => (
                           <button
                             key={n.id}
-                            onClick={() => markNotificationRead(n.id)}
+                            onClick={() => { markNotificationRead(n.id); if (n.title === 'Final Examination Schedule Published' && currentUser.role === 'hod') { setActiveMenu('h-examination-management'); setIsSidebarOpen(false); } setNotifOpen(false); }}
                             className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 ${!n.read ? 'bg-blue-50/50' : ''}`}
                           >
                             <p className="text-sm font-medium text-slate-900">{n.title}</p>
                             <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                            {n.title === 'Final Examination Schedule Published' && currentUser.role === 'hod' && <p className="text-xs text-blue-600 font-medium mt-1">View Schedule</p>}
                             <p className="text-[10px] text-slate-400 mt-1">{n.date}</p>
                           </button>
                         ))}
@@ -146,7 +165,7 @@ export function AppShell() {
 
         {/* Content */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] w-full mx-auto">
-          <DashboardRouter activeMenu={currentActive} />
+          <DashboardRouter activeMenu={currentActive} onNavigate={setActiveMenu} />
         </main>
       </div>
     </div>

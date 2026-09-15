@@ -4,10 +4,10 @@ import { DataTable, StatusBadge } from './DataTable';
 import { PageHeader, SectionTitle } from './PageHeader';
 import { StatCard } from './StatCard';
 import { StudentDetailModal, StaffDetailModal } from './DetailModals';
-import { Search, Users, GraduationCap, CheckSquare, XCircle, RotateCcw, MessageSquare, FileText, Download, Mail, ShieldCheck, Send } from 'lucide-react';
+import { Search, Users, GraduationCap, CheckSquare, XCircle, RotateCcw, MessageSquare, FileText, Download, Mail, ShieldCheck, Send, Calendar, AlertCircle, TrendingUp } from 'lucide-react';
 import type { Student, Staff, ApprovalRequest, Message, Role, Complaint } from '../data/types';
 
-export function StudentsDirectory({ scopeDept, editable, showStats = true, classFilter = false, courseFilter = false }: { scopeDept?: string; editable?: boolean; showStats?: boolean; classFilter?: boolean; courseFilter?: boolean }) {
+export function StudentsDirectory({ scopeDept, editable, showStats = true, classFilter = false, courseFilter = false, showAttendanceStats = false, extraStats }: { scopeDept?: string; editable?: boolean; showStats?: boolean; classFilter?: boolean; courseFilter?: boolean; showAttendanceStats?: boolean; extraStats?: ReactNode }) {
   const { data, updateStudent } = useStore();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Student | null>(null);
@@ -63,6 +63,15 @@ export function StudentsDirectory({ scopeDept, editable, showStats = true, class
           <StatCard label="With Backlogs" value={rows.filter((s) => s.backlogs > 0).length} icon={<RotateCcw className="w-5 h-5" />} accent="amber" />
         </div>
       )}
+      {showAttendanceStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <StatCard label="College Average" value={`${Math.round(data.students.reduce((a, s) => a + s.attendancePct, 0) / data.students.length)}%`} icon={<TrendingUp className="w-5 h-5" />} accent="blue" />
+          <StatCard label="Above 75%" value={data.students.filter((s) => s.attendancePct >= 75).length} icon={<CheckSquare className="w-5 h-5" />} accent="emerald" />
+          <StatCard label="Below 75%" value={data.students.filter((s) => s.attendancePct < 75).length} icon={<ShieldCheck className="w-5 h-5" />} accent="rose" />
+          <StatCard label="Below 70%" value={data.students.filter((s) => s.attendancePct < 70).length} icon={<ShieldCheck className="w-5 h-5" />} accent="amber" />
+        </div>
+      )}
+      {extraStats}
       <DataTable
         rows={rows}
         columns={[
@@ -83,7 +92,7 @@ export function StudentsDirectory({ scopeDept, editable, showStats = true, class
   );
 }
 
-export function StaffDirectory({ scopeDept, roles, editable, title = 'Staff Directory' }: { scopeDept?: string; roles?: string[]; editable?: boolean; title?: string }) {
+export function StaffDirectory({ scopeDept, roles, editable, title = 'Staff Directory', extraAction, showAttendance = false }: { scopeDept?: string; roles?: string[]; editable?: boolean; title?: string; extraAction?: ReactNode; showAttendance?: boolean }) {
   const { data, updateStaff } = useStore();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Staff | null>(null);
@@ -97,9 +106,12 @@ export function StaffDirectory({ scopeDept, roles, editable, title = 'Staff Dire
   return (
     <div>
       <PageHeader title={title} description={scopeDept ? `${deptName(data, scopeDept)}` : 'All staff'} action={
-        <div className="flex items-center bg-white border border-slate-300 rounded-lg px-3 py-2 w-64">
-          <Search className="w-4 h-4 text-slate-400" />
-          <input className="bg-transparent border-0 outline-0 text-sm ml-2 flex-1" placeholder="Search by name..." value={query} onChange={(e) => setQuery(e.target.value)} />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center bg-white border border-slate-300 rounded-lg px-3 py-2 w-64">
+            <Search className="w-4 h-4 text-slate-400" />
+            <input className="bg-transparent border-0 outline-0 text-sm ml-2 flex-1" placeholder="Search by name..." value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+          {extraAction}
         </div>
       } />
       <DataTable
@@ -108,7 +120,9 @@ export function StaffDirectory({ scopeDept, roles, editable, title = 'Staff Dire
           { key: 'id', header: 'ID', render: (s) => s.id.toUpperCase() },
           { key: 'name', header: 'Name', render: (s) => <span className="font-medium text-slate-900">{s.name}</span> },
           { key: 'designation', header: 'Designation' },
-          { key: 'departmentId', header: 'Dept', render: (s) => deptCode(data, s.departmentId) },
+          ...(showAttendance
+            ? [{ key: 'attendancePct', header: 'Attendance', render: (s: Staff) => <span className={s.attendancePct < 75 ? 'text-rose-600 font-semibold' : ''}>{s.attendancePct}%</span> }]
+            : [{ key: 'departmentId', header: 'Dept', render: (s: Staff) => deptCode(data, s.departmentId) }]),
           { key: 'subjects', header: 'Subjects', render: (s) => s.subjects.length || '—' },
           { key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} /> },
           { key: 'email', header: 'Email' },
@@ -122,30 +136,56 @@ export function StaffDirectory({ scopeDept, roles, editable, title = 'Staff Dire
 }
 
 export function ApprovalsPanel({ filter, canAct }: { filter?: ApprovalRequest['type'][]; canAct?: boolean }) {
-  const { data, updateApproval, addNotification } = useStore();
+  const { data, updateApproval, updateCandidate, addNotification } = useStore();
   const [selected, setSelected] = useState<ApprovalRequest | null>(null);
   const [remarks, setRemarks] = useState('');
 
-  const rows = data.approvals.filter((a) => (!filter || filter.includes(a.type)) && a.status !== 'approved' && a.status !== 'rejected');
+const rows = data.approvals.filter((a) =>
+    (!filter || filter.includes(a.type)) &&
+    a.status !== 'approved' &&
+    a.status !== 'rejected' &&
+    a.type !== 'budget' &&
+    a.type !== 'purchase' &&
+    a.type !== 'timetable' &&
+    (a.type !== 'recruitment' && a.type !== 'promotion' ? true : a.status === 'dean-recommended') &&
+    // Leave requests are handled in the Leave Management module; Principal only sees Dean-submitted leaves
+    (a.type !== 'leave' || a.submittedByRole === 'dean')
+  );
+
+  const shortlistedCandidates = selected?.shortlistedCandidateIds?.length
+    ? data.candidates.filter((c) => selected.shortlistedCandidateIds?.includes(c.id))
+    : [];
 
   const act = (status: ApprovalRequest['status']) => {
     if (!selected) return;
-    updateApproval(selected.id, { status, principalRemarks: remarks });
+    const remarksText = remarks.trim();
+
+    if (selected.type === 'recruitment' && selected.shortlistedCandidateIds?.length) {
+      selected.shortlistedCandidateIds.forEach((candidateId) => {
+        updateCandidate(candidateId, { status: status === 'approved' ? 'selected' : 'rejected' });
+      });
+    }
+
+    updateApproval(selected.id, { status, principalRemarks: remarksText });
     const title = selected.title;
     const decision = status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'sent back for revision';
-    addNotification({ id: `n${Date.now()}`, title: `Approval ${decision}`, message: `${title} has been ${decision} by Principal`, date: new Date().toISOString().slice(0, 10), audience: [selected.submittedByRole], read: false });
-    setSelected({ ...selected, status, principalRemarks: remarks });
+    const audience: Role[] = selected.type === 'result' && status === 'approved' ? ['office-superintendent'] : [selected.submittedByRole];
+    const message = selected.type === 'result'
+      ? status === 'approved'
+        ? `Result publication for ${title} has been approved by the Principal. The administration office can proceed with publishing.`
+        : `${title} was ${decision} by the Principal${remarksText ? ` with remarks: ${remarksText}` : ''}.`
+      : `${title} has been ${decision} by Principal${remarksText ? ` with remarks: ${remarksText}` : ''}`;
+    const notificationTitle = selected.type === 'result' && status === 'approved' ? 'Result publication approved' : `Approval ${decision}`;
+    addNotification({ id: `n${Date.now()}`, title: notificationTitle, message, date: new Date().toISOString().slice(0, 10), audience, read: false });
+    setSelected({ ...selected, status, principalRemarks: remarksText });
     setRemarks('');
   };
 
   return (
     <div>
       <PageHeader title="Pending Approvals" description="Review and act on requests submitted by HODs, Faculty, and Accounts" />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Pending" value={rows.length} icon={<CheckSquare className="w-5 h-5" />} accent="amber" />
-        <StatCard label="Timetable" value={rows.filter((r) => r.type === 'timetable').length} icon={<CheckSquare className="w-5 h-5" />} accent="blue" />
-        <StatCard label="Budget/Purchase" value={rows.filter((r) => r.type === 'budget' || r.type === 'purchase').length} icon={<CheckSquare className="w-5 h-5" />} accent="slate" />
-        <StatCard label="Events/Leave" value={rows.filter((r) => r.type === 'event' || r.type === 'leave').length} icon={<CheckSquare className="w-5 h-5" />} accent="indigo" />
+      <div className="mb-6 w-full max-w-xs">
+        <StatCard label="Pending" value={rows.length} icon={<CheckSquare className="w-4 h-4 sm:w-5 sm:h-5" />} accent="amber" compact />
       </div>
       <DataTable
         rows={rows}
@@ -154,7 +194,6 @@ export function ApprovalsPanel({ filter, canAct }: { filter?: ApprovalRequest['t
           { key: 'type', header: 'Type', render: (a) => <span className="badge bg-slate-100 text-slate-700 capitalize">{a.type}</span> },
           { key: 'submittedBy', header: 'Submitted By' },
           { key: 'date', header: 'Date' },
-          { key: 'amount', header: 'Amount', render: (a) => a.amount ? `₹${a.amount.toLocaleString('en-IN')}` : '—' },
           { key: 'status', header: 'Status', render: (a) => <StatusBadge status={a.status} /> },
         ]}
         onRowClick={(a) => { setSelected(a); setRemarks(a.principalRemarks ?? ''); }}
@@ -172,6 +211,33 @@ export function ApprovalsPanel({ filter, canAct }: { filter?: ApprovalRequest['t
               {selected.amount && <div className="card p-3"><p className="text-xs text-slate-500">Amount</p><p className="text-sm text-slate-900 font-semibold">₹{selected.amount.toLocaleString('en-IN')}</p></div>}
               <div className="card p-3"><p className="text-xs text-slate-500 mb-1">Details</p><dl className="grid grid-cols-2 gap-2">{Object.entries(selected.details).map(([k, v]) => <div key={k}><dt className="text-xs text-slate-400 capitalize">{k}</dt><dd className="text-sm text-slate-900">{v}</dd></div>)}</dl></div>
 
+              {selected.type === 'syllabus' && (
+                <div className="card p-3 bg-blue-50/50">
+                  <p className="text-xs text-slate-500">Syllabus Approval Flow</p>
+                  <p className="text-sm text-slate-900">The HOD submits the revised syllabus for approval. Approve to release it, reject to return it, or send it back for revision with remarks.</p>
+                </div>
+              )}
+              {selected.type === 'result' && (
+                <div className="card p-3 bg-amber-50/60">
+                  <p className="text-xs text-slate-500">Result Publication Flow</p>
+                  <p className="text-sm text-slate-900">If approved, the administration office receives a publication notification. If rejected or sent back, the result request returns to the HOD with remarks.</p>
+                </div>
+              )}
+
+              {selected.type === 'recruitment' && (
+                <div className="card p-3 bg-slate-50">
+                  <p className="text-xs text-slate-500">Shortlisted Candidates</p>
+                  {shortlistedCandidates.length > 0 ? (
+                    <ul className="list-disc pl-5 space-y-2 text-sm text-slate-700">
+                      {shortlistedCandidates.map((candidate) => (
+                        <li key={candidate.id}>{candidate.name} — {candidate.qualification}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-slate-400">No candidates have been shortlisted for this recruitment request yet.</p>
+                  )}
+                </div>
+              )}
               {selected.timetableEntries && selected.timetableEntries.length > 0 && (
                 <div>
                   <p className="text-xs text-slate-500 mb-2">Submitted Timetable</p>
@@ -282,12 +348,27 @@ export function GrievancesPanel({ scopeDept, canAssign }: { scopeDept?: string; 
   );
 }
 
-export function SyllabusProgressView({ scopeDept }: { scopeDept?: string }) {
+export function SyllabusProgressView({ scopeDept, quickActions, onNavigate }: { scopeDept?: string; quickActions?: { id: string; label: string; icon: ReactNode }[]; onNavigate?: (id: string) => void }) {
   const { data } = useStore();
   const rows = data.subjects.filter((s) => !scopeDept || s.departmentId === scopeDept);
   return (
     <div>
       <PageHeader title="Syllabus Progress" description="Subject-wise syllabus completion tracking" />
+      {quickActions && quickActions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          {quickActions.map((a) => (
+            <button
+              key={a.id}
+              title={a.label}
+              onClick={() => onNavigate?.(a.id)}
+              className="flex flex-col items-center gap-1.5 w-24 px-2 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition"
+            >
+              {a.icon}
+              <span className="text-[11px] font-medium leading-tight text-center">{a.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <DataTable
         rows={rows}
         columns={[
@@ -490,7 +571,7 @@ export function RegisterComplaintView() {
         </div>
         <div className="card p-5">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">My Filed Complaints</h3>
-          {myComplaints.length === 0 ? <p className="text-sm text-slate-400">No complaints filed yet.</p> :
+{myComplaints.length === 0 ? <p className="text-sm text-slate-400">No complaints filed yet.</p> :
           <div className="space-y-2">
             {myComplaints.map((c) => (
               <div key={c.id} className="p-3 rounded-lg bg-slate-50">
@@ -500,6 +581,311 @@ export function RegisterComplaintView() {
             ))}
           </div>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+const TEACHING_LEAVE_ROLES: Role[] = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant', 'office-superintendent', 'lab-assistant'];
+
+function leaveForwardTargets(role: Role): { audience: Role[]; label: string } {
+  switch (role) {
+    case 'hod':
+      return { audience: ['dean'], label: 'Dean' };
+    case 'dean':
+      return { audience: ['principal'], label: 'Principal' };
+    case 'principal':
+      return { audience: [], label: 'Higher Authority' };
+    default:
+      return { audience: ['hod', 'dean'], label: 'HOD & Dean' };
+  }
+}
+
+export function LeaveManagementView() {
+  const { data, currentUser, addApproval, updateApproval, addNotification } = useStore();
+  const [form, setForm] = useState({ type: 'Casual', from: '', to: '', reason: '' });
+  const [submitted, setSubmitted] = useState(false);
+  const [selected, setSelected] = useState<ApprovalRequest | null>(null);
+  const [remarks, setRemarks] = useState('');
+  const [error, setError] = useState('');
+
+  if (!currentUser) return null;
+  const role: Role = currentUser.role;
+  const targets = leaveForwardTargets(role);
+
+  const myRequests = data.approvals
+    .filter((a) => a.type === 'leave' && a.submittedBy === currentUser.name)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  // Faculty / non-teaching / HOD requests go to HOD first (or Dean for HOD), then Dean / Principal
+  const isFaculty = TEACHING_LEAVE_ROLES.includes(role);
+  const isHod = role === 'hod';
+
+  // Requests awaiting this user's review
+  const reviewRows = data.approvals.filter((a) => {
+    if (role === 'hod') {
+      // HOD reviews faculty leave requests from their dept
+      return a.type === 'leave' && TEACHING_LEAVE_ROLES.includes(a.submittedByRole) && a.departmentId === currentUser.departmentId && a.hodStatus === 'pending';
+    }
+    if (role === 'dean') {
+      // Dean reviews faculty requests after HOD decision + HOD requests
+      return a.type === 'leave' && (
+        (TEACHING_LEAVE_ROLES.includes(a.submittedByRole) && a.hodStatus === 'recommended') ||
+        (a.submittedByRole === 'hod')
+      );
+    }
+    if (role === 'principal') {
+      // Principal reviews Dean requests
+      return a.type === 'leave' && a.submittedByRole === 'dean';
+    }
+    return false;
+  });
+
+  const days = (() => {
+    if (!form.from || !form.to) return 0;
+    const f = new Date(form.from);
+    const t = new Date(form.to);
+    if (t < f) return 0;
+    return Math.round((t.getTime() - f.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  })();
+
+  const submit = () => {
+    setError('');
+    if (!form.from || !form.to || !form.reason.trim()) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (days <= 0) {
+      setError('The end date must be on or after the start date.');
+      return;
+    }
+    const id = `a${Date.now()}`;
+    const title = `Leave request - ${currentUser.name}`;
+    addApproval({
+      id,
+      type: 'leave',
+      title,
+      submittedBy: currentUser.name,
+      submittedByRole: role,
+      departmentId: currentUser.departmentId,
+      date: new Date().toISOString().slice(0, 10),
+      purpose: `${form.type} leave for ${days} day(s)`,
+      status: 'pending',
+      deanStatus: 'pending',
+      hodStatus: isHod ? undefined : 'pending',
+      details: { from: form.from, to: form.to, days: String(days), type: form.type, reason: form.reason, balance: '10 days' },
+      documents: [],
+    });
+    addNotification({
+      id: `n${Date.now()}`,
+      title: 'New leave request',
+      message: `${currentUser.name} applied for ${form.type} leave (${form.from} to ${form.to}).`,
+      date: new Date().toISOString().slice(0, 10),
+      audience: role === 'principal' ? ['dean'] : targets.audience,
+      read: false,
+    });
+    setForm({ type: 'Casual', from: '', to: '', reason: '' });
+    setSubmitted(true);
+  };
+
+  const actOnReview = (approved: boolean) => {
+    if (!selected) return;
+    const remark = remarks.trim();
+    if (!remark) {
+      setError('Remarks are mandatory before recording a decision.');
+      return;
+    }
+    const patch: Partial<ApprovalRequest> = {};
+    const decisionMsg = approved ? 'approved' : 'rejected';
+    let audience: Role[] = [];
+    let title = '';
+    if (role === 'hod') {
+      patch.hodStatus = approved ? 'recommended' : 'rejected';
+      patch.hodRemarks = remark;
+      if (approved) {
+        patch.status = 'pending';
+        audience = ['dean'];
+        title = 'Leave request forwarded to Dean';
+      } else {
+        patch.status = 'rejected';
+        audience = [selected.submittedByRole];
+        title = 'Leave request rejected by HOD';
+      }
+    } else if (role === 'dean') {
+      patch.deanStatus = approved ? 'recommended' : 'rejected';
+      patch.deanRemarks = remark;
+      if (selected.submittedByRole === 'hod') {
+        patch.status = approved ? 'approved' : 'rejected';
+        audience = approved ? ['hod'] : ['hod'];
+        title = approved ? 'Leave approved by Dean' : 'Leave rejected by Dean';
+      } else {
+        // Faculty request - Dean makes final decision
+        patch.status = approved ? 'approved' : 'rejected';
+        audience = [selected.submittedByRole];
+        title = approved ? 'Leave approved by Dean' : 'Leave rejected by Dean';
+      }
+    } else if (role === 'principal') {
+      patch.status = approved ? 'approved' : 'rejected';
+      patch.principalRemarks = remark;
+      audience = ['dean'];
+      title = approved ? 'Leave approved by Principal' : 'Leave rejected by Principal';
+    }
+    updateApproval(selected.id, patch);
+    addNotification({
+      id: `n${Date.now()}`,
+      title,
+      message: `${selected.title} has been ${decisionMsg}${remark ? ` with remarks: ${remark}` : ''}.`,
+      date: new Date().toISOString().slice(0, 10),
+      audience,
+      read: false,
+    });
+    setSelected(null);
+    setRemarks('');
+    setError('');
+  };
+
+  const selectedRequest = selected;
+
+  return (
+    <div>
+      <PageHeader title="Apply for Leave" description="Submit and track leave requests based on the college approval workflow" />
+
+      <div className={`grid gap-6 mb-6 ${role === 'principal' ? 'lg:grid-cols-1' : 'lg:grid-cols-3'}`}>
+        <div className={`card p-5 ${role === 'principal' ? '' : 'lg:col-span-2'}`}>
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">{role === 'principal' ? 'Leave Request' : 'New Leave Request'}</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Leave Type</label>
+              <select className="input w-full" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                <option>Casual</option>
+                <option>Medical</option>
+                <option>Earned</option>
+                <option>Maternity</option>
+                <option>Paternity</option>
+                <option>Unpaid</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">From Date</label>
+                <input className="input w-full" type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">To Date</label>
+                <input className="input w-full" type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <span className="font-semibold">Total Days:</span>
+              <span className="badge bg-blue-100 text-blue-700">{days}</span>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Leave</label>
+              <textarea className="input w-full" rows={3} placeholder="Provide a brief reason..." value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+            </div>
+            {error && <p className="text-sm text-rose-600">{error}</p>}
+            <button className="btn-primary" onClick={submit}><Send className="w-4 h-4" /> Submit Leave Request</button>
+            {submitted && <span className="text-sm text-emerald-700 ml-2">Leave request submitted successfully.</span>}
+          </div>
+        </div>
+        {role !== 'principal' && (
+          <div className="card p-5 bg-slate-50">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Approval Workflow</h3>
+            <p className="text-sm text-slate-600 mb-4">Your leave request will be forwarded to:</p>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="badge bg-indigo-100 text-indigo-700">{roleLabels[currentUser.role]}</span>
+              <span className="text-slate-400">→</span>
+              <span className="badge bg-blue-100 text-blue-700">{targets.label}</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-4">
+              {isHod
+                ? 'HOD leave requests are reviewed and decided by the Dean.'
+                : isFaculty
+                ? 'Faculty leave is first reviewed by the HOD, then forwarded to the Dean for the final decision.'
+                : 'The Principal reviews leave requests submitted by the Dean.'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {reviewRows.length > 0 && (
+        <div className="card p-5 mb-6">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">
+            {role === 'hod' ? 'Leave Requests Awaiting Your Review' : role === 'dean' ? 'Leave Requests Pending Final Decision' : 'Leave Requests Awaiting Your Decision'}
+          </h3>
+          <DataTable
+            rows={reviewRows}
+            columns={[
+              { key: 'title', header: 'Request', render: (a) => <span className="font-medium">{a.title}</span> },
+              { key: 'submittedByRole', header: 'Applicant', render: (a) => <span className="badge bg-slate-100 text-slate-700">{roleLabels[a.submittedByRole]}</span> },
+              { key: 'date', header: 'Date' },
+              { key: 'detail', header: 'Period', render: (a) => `${a.details.from} → ${a.details.to}` },
+              { key: 'status', header: 'Status', render: (a) => <StatusBadge status={a.status} /> },
+            ]}
+            onRowClick={(a) => { setSelected(a); setRemarks(role === 'dean' ? a.hodRemarks ?? '' : role === 'principal' ? a.deanRemarks ?? '' : ''); setError(''); }}
+          />
+        </div>
+      )}
+
+      {selectedRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelected(null)} />
+          <div className="relative max-w-lg w-full bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-lg font-semibold text-slate-900">{selectedRequest.title}</h2>
+              <p className="text-sm text-slate-500">{roleLabels[selectedRequest.submittedByRole]} · {selectedRequest.date}</p>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="card p-3"><p className="text-xs text-slate-500">From</p><p className="text-sm text-slate-900 mt-0.5">{selectedRequest.details.from}</p></div>
+                <div className="card p-3"><p className="text-xs text-slate-500">To</p><p className="text-sm text-slate-900 mt-0.5">{selectedRequest.details.to}</p></div>
+                <div className="card p-3"><p className="text-xs text-slate-500">Days</p><p className="text-sm text-slate-900 mt-0.5">{selectedRequest.details.days}</p></div>
+                <div className="card p-3"><p className="text-xs text-slate-500">Type</p><p className="text-sm text-slate-900 mt-0.5">{selectedRequest.details.type}</p></div>
+              </div>
+              <div className="card p-3"><p className="text-xs text-slate-500">Reason</p><p className="text-sm text-slate-900 mt-0.5">{selectedRequest.details.reason}</p></div>
+
+              {role === 'dean' && selectedRequest.hodStatus && (
+                <div className="card p-3 bg-blue-50/60">
+                  <p className="text-xs text-slate-500">HOD's Decision &amp; Remarks</p>
+                  <div className="flex items-center gap-2 mt-1"><StatusBadge status={selectedRequest.hodStatus === 'recommended' ? 'recommended' : 'rejected'} /></div>
+                  <p className="text-sm text-slate-900 mt-1">{selectedRequest.hodRemarks || 'No remarks provided.'}</p>
+                </div>
+              )}
+              {role === 'principal' && (
+                <div className="card p-3 bg-blue-50/60">
+                  <p className="text-xs text-slate-500">Dean's Decision &amp; Remarks</p>
+                  <div className="flex items-center gap-2 mt-1"><StatusBadge status={selectedRequest.deanStatus === 'recommended' ? 'recommended' : 'rejected'} /></div>
+                  <p className="text-sm text-slate-900 mt-1">{selectedRequest.deanRemarks || 'No remarks provided.'}</p>
+                </div>
+              )}
+
+              <textarea className="input" rows={3} placeholder={
+                role === 'hod' ? 'Remarks are mandatory. Record your decision...' :
+                role === 'dean' ? 'Record your final decision with remarks...' :
+                'Record your decision with remarks...'
+              } value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+              {error && <p className="text-sm text-rose-600">{error}</p>}
+              <div className="flex gap-2">
+                <button className="btn-success flex-1" onClick={() => actOnReview(true)}><CheckSquare className="w-4 h-4" /> {role === 'hod' ? 'Approve & Forward to Dean' : 'Approve'}</button>
+                <button className="btn-danger flex-1" onClick={() => actOnReview(false)}><XCircle className="w-4 h-4" /> Reject</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="card p-5">
+        <h3 className="text-sm font-semibold text-slate-900 mb-3">My Leave Requests</h3>
+        <DataTable
+          rows={myRequests}
+          columns={[
+            { key: 'title', header: 'Request', render: (a) => <span className="font-medium">{a.title}</span> },
+            { key: 'date', header: 'Date' },
+            { key: 'detail', header: 'Period', render: (a) => `${a.details.from} → ${a.details.to}` },
+            { key: 'status', header: 'Status', render: (a) => <StatusBadge status={a.status} /> },
+          ]}
+          emptyMessage="You have not submitted any leave requests yet."
+        />
       </div>
     </div>
   );

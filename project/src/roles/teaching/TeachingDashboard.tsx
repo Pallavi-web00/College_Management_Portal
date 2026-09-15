@@ -1,13 +1,18 @@
 import { useStore, deptName, staffName, roleLabels } from '../../store/StoreContext';
+import { classLabel, semShort, subjectTypeLabel, resourceShortLabel, resourceEffectiveStatus } from '../hod/subjectAllocationLogic';
+import type { SubjectAllocation } from '../../data/types';
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
-import { Placeholder, InboxView, RegisterComplaintView } from '../../components/SharedViews';
+import { Placeholder, RegisterComplaintView, LeaveManagementView } from '../../components/SharedViews';
+import { MyResources } from '../../components/ResourceViews';
 import { Modal } from '../../components/Modal';
 import { BookOpen, GraduationCap, FlaskConical, ScrollText, Users, Calendar, Award, FileCheck, FileText, Beaker, Users2, Send, Plus, CheckSquare, XCircle, ClipboardCheck } from 'lucide-react';
 import { useState } from 'react';
-import type { Student, PhdScholar, Policy } from '../../data/types';
+import type { Student, Subject, PhdScholar } from '../../data/types';
+import { TeachingModule, ResearchModule, CommitteeModule } from './AssociateProfessorModule';
 import { StudentDetailModal } from '../../components/DetailModals';
+import { FacultyExamDuties } from '../exam/ExamWorkflow';
 
 export function TeachingDashboard({ activeMenu }: { activeMenu: string }) {
   const { currentUser } = useStore();
@@ -16,8 +21,9 @@ export function TeachingDashboard({ activeMenu }: { activeMenu: string }) {
 
   if (activeMenu.endsWith('-timetable')) return <MyTimetable />;
   if (activeMenu.endsWith('-class')) return <MyClass />;
-  if (activeMenu.endsWith('-inbox')) return <InboxView recipientRole={role} recipientName={currentUser.name} />;
+  if (activeMenu.endsWith('-resources')) return <MyResources />;
   if (activeMenu.endsWith('-complaint')) return <RegisterComplaintView />;
+  if (activeMenu.endsWith('-apply-leave')) return <LeaveManagementView />;
 
   if (role === 'professor') {
     switch (activeMenu) {
@@ -29,9 +35,9 @@ export function TeachingDashboard({ activeMenu }: { activeMenu: string }) {
   }
   if (role === 'associate-professor') {
     switch (activeMenu) {
-      case 'ap-teaching': return <TeachingView />;
-      case 'ap-research': return <ResearchSupervision />;
-      case 'ap-committee': return <CommitteeWork />;
+      case 'ap-teaching': return <TeachingModule />;
+      case 'ap-research': return <ResearchModule />;
+      case 'ap-committee': return <CommitteeModule />;
     }
   }
   if (role === 'assistant-professor') {
@@ -72,6 +78,7 @@ function TeachingHome() {
         <StatCard label="Weekly Hours" value={currentUser.weeklyHours} icon={<Calendar className="w-5 h-5" />} accent="slate" />
         <StatCard label="Syllabus Done" value={`${avgCompletion}%`} icon={<Award className="w-5 h-5" />} accent={avgCompletion < 75 ? 'amber' : 'emerald'} />
       </div>
+      <FacultyExamDuties />
       <div className="card p-5">
         <h3 className="text-sm font-semibold text-slate-900 mb-3">My Subjects</h3>
         <div className="space-y-3">
@@ -120,43 +127,155 @@ function MyTimetable() {
 
 function MyClass() {
   const { currentUser, data } = useStore();
+  const [openAlloc, setOpenAlloc] = useState<{ alloc: SubjectAllocation; section: string } | null>(null);
   const [selected, setSelected] = useState<Student | null>(null);
   if (!currentUser) return null;
-  const myTimetable = data.timetable.filter((t) => t.facultyId === currentUser.id && t.published);
-  const myClassCodes = [...new Set(myTimetable.map((t) => `${t.section} Sem ${t.semester}`))];
-  const myStudents = data.students.filter((s) => s.departmentId === currentUser.departmentId && myClassCodes.some((c) => c.includes(`Sem ${s.semester}`) && c.startsWith(s.section)));
+
+  /* My Classes come straight from the HOD's Subject Allocation — no manual setup */
+  const myAllocs = data.subjectAllocations.filter((a) => a.facultyId === currentUser.id && a.status !== 'draft');
+  const rows = myAllocs.flatMap((a) => {
+    const subject = data.subjects.find((s) => s.id === a.subjectId);
+    if (!subject) return [];
+    return a.classIds.map((sec) => ({ id: `${a.id}-${sec}`, alloc: a, subject, section: sec }));
+  });
+
   return (
     <div>
-      <PageHeader title="My Class" description="Students in your assigned classes (from published timetable)" />
-      {myTimetable.length === 0 ? (
+      <PageHeader title="My Classes" description="Assigned automatically by your HOD through Subject Allocation" />
+      {rows.length === 0 ? (
         <div className="card p-8 text-center">
           <div className="w-14 h-14 rounded-full bg-slate-100 mx-auto flex items-center justify-center mb-4"><Users className="w-7 h-7 text-slate-400" /></div>
           <p className="text-sm font-medium text-slate-900">No classes assigned yet</p>
-          <p className="text-xs text-slate-500 mt-1">Your class lists will appear here once the HOD publishes a timetable assigning you to classes.</p>
+          <p className="text-xs text-slate-500 mt-1">Your subjects, classes and resources will appear here once the HOD confirms your subject allocation.</p>
         </div>
       ) : (
         <>
-          <div className="card p-4 mb-4">
-            <p className="text-xs text-slate-500 mb-2">Your Classes (from published timetable)</p>
-            <div className="flex flex-wrap gap-2">{myClassCodes.map((c) => <span key={c} className="badge bg-blue-100 text-blue-700">{c}</span>)}</div>
-          </div>
           <DataTable
-            rows={myStudents}
+            rows={rows}
+            columns={[
+              { key: 'subject', header: 'Subject', render: (r) => <span className="font-medium text-slate-900">{r.subject.name}</span> },
+              { key: 'code', header: 'Code', render: (r) => r.subject.code },
+              { key: 'semester', header: 'Semester', render: (r) => semShort(r.subject.semester) },
+              { key: 'class', header: 'Class', render: (r) => <span className="badge bg-blue-100 text-blue-700">{classLabel(r.subject.semester, r.section)}</span> },
+              { key: 'type', header: 'Type', render: (r) => subjectTypeLabel(r.subject.type) },
+              { key: 'role', header: 'Faculty Role', render: () => <span className="badge bg-slate-100 text-slate-600">Faculty</span> },
+              { key: 'resources', header: 'Resources', render: (r) => resourceShortLabel(data, r.alloc.resourceIds) },
+            ]}
+            onRowClick={(r) => setOpenAlloc({ alloc: r.alloc, section: r.section })}
+          />
+          <p className="text-xs text-slate-400 mt-3">Click a class to open it — resources, students, syllabus and timetable come from the allocation.</p>
+        </>
+      )}
+
+      {openAlloc && (
+        <MyClassDetailModal
+          alloc={openAlloc.alloc}
+          section={openAlloc.section}
+          onClose={() => setOpenAlloc(null)}
+          onOpenStudent={(s) => { setOpenAlloc(null); setSelected(s); }}
+        />
+      )}
+      <StudentDetailModal student={selected} open={!!selected} onClose={() => setSelected(null)} />
+    </div>
+  );
+}
+
+/* Class workspace opened from My Classes — everything is derived from the allocation */
+function MyClassDetailModal({
+  alloc,
+  section,
+  onClose,
+  onOpenStudent,
+}: {
+  alloc: SubjectAllocation;
+  section: string;
+  onClose: () => void;
+  onOpenStudent: (s: Student) => void;
+}) {
+  const { currentUser, data } = useStore();
+  if (!currentUser) return null;
+  const subject = data.subjects.find((s) => s.id === alloc.subjectId);
+  if (!subject) return null;
+  const label = classLabel(subject.semester, section);
+  const resources = alloc.resourceIds.map((id) => data.resources.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => !!r);
+  const students = data.students.filter((s) => s.departmentId === subject.departmentId && s.semester === subject.semester && s.section === section && s.status === 'active');
+  const ttEntries = data.timetable.filter((t) => t.published && t.facultyId === currentUser.id && t.subject === subject.name && t.section === section && t.semester === subject.semester);
+
+  return (
+    <Modal open onClose={onClose} title={`${subject.name} — ${label}`} subtitle={`${subject.code} · ${semShort(subject.semester)} · ${subjectTypeLabel(subject.type)}`} size="xl">
+      <div className="space-y-5">
+        {/* Assigned resources */}
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Assigned Resources</p>
+          {resources.length === 0 ? (
+            <p className="text-sm text-slate-400">No resources assigned yet.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {resources.map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-2 p-3 rounded-lg bg-slate-50">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{r.name}</p>
+                    <p className="text-xs text-slate-500">{r.location}{r.capacity ? ` · Capacity ${r.capacity}` : ''}</p>
+                  </div>
+                  <StatusBadge status={resourceEffectiveStatus(data, r)} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Syllabus & teaching progress */}
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div className="card p-3.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Syllabus Progress</p>
+            <p className="text-xl font-bold text-slate-900 mt-1">{subject.syllabusCompletion}%</p>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden mt-2">
+              <div className={`h-full rounded-full ${subject.syllabusCompletion < 70 ? 'bg-rose-500' : subject.syllabusCompletion < 85 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${subject.syllabusCompletion}%` }} />
+            </div>
+            <p className="text-xs text-slate-500 mt-1.5">{subject.unitsCompleted}/{subject.unitsTotal} units completed</p>
+          </div>
+          <div className="card p-3.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Assignments</p>
+            <p className="text-sm text-slate-400 mt-2">No assignments published yet.</p>
+          </div>
+          <div className="card p-3.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Assessments</p>
+            <p className="text-sm text-slate-400 mt-2">No assessments scheduled yet.</p>
+          </div>
+        </div>
+
+        {/* Timetable for this class (only when published) */}
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Timetable</p>
+          {ttEntries.length === 0 ? (
+            <div className="card p-4 text-center">
+              <p className="text-sm text-slate-500">Timetable will be available after timetable publication.</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {ttEntries.map((t) => (
+                <span key={t.id} className="badge bg-blue-100 text-blue-700">{t.day} · {t.slot} · {t.room}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Students */}
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Students ({students.length})</p>
+          <DataTable
+            rows={students}
             columns={[
               { key: 'name', header: 'Name', render: (s) => <span className="font-medium text-slate-900">{s.name}</span> },
               { key: 'rollNo', header: 'Roll No' },
-              { key: 'semester', header: 'Sem' },
-              { key: 'section', header: 'Section' },
               { key: 'attendancePct', header: 'Attendance', render: (s) => `${s.attendancePct}%` },
-              { key: 'gpa', header: 'GPA' },
             ]}
-            onRowDoubleClick={(s) => setSelected(s)}
+            onRowClick={(s) => onOpenStudent(s)}
+            emptyMessage="No students found in this section."
           />
-          <p className="text-xs text-slate-400 mt-3">Double-click a student to view full profile.</p>
-          <StudentDetailModal student={selected} open={!!selected} onClose={() => setSelected(null)} />
-        </>
-      )}
-    </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

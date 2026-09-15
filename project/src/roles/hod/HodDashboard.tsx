@@ -2,54 +2,44 @@ import { useStore, deptName, deptCode, staffName } from '../../store/StoreContex
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
-import { StudentsDirectory, StaffDirectory, GrievancesPanel, SyllabusProgressView, Placeholder, InboxView } from '../../components/SharedViews';
-import { Building2, Users, Beaker, GraduationCap, ClipboardCheck, TrendingUp, FileText, Calendar, Award, AlertTriangle, Clock, CheckSquare, Send, Plus, XCircle } from 'lucide-react';
-import { useState } from 'react';
-import type { Student, Staff, TimetableEntry } from '../../data/types';
-import { StudentDetailModal, StaffDetailModal } from '../../components/DetailModals';
+import { StudentsDirectory, StaffDirectory, GrievancesPanel, SyllabusProgressView, Placeholder, LeaveManagementView } from '../../components/SharedViews';
+import { ResourceManagement } from '../../components/ResourceViews';
+import { TimetableWorkspace } from './TimetableWorkspace';
+import { SubjectAllocationWorkspace } from './SubjectAllocationWorkspace';
+import { AssessmentMarksWorkspace, ExaminationManagementWorkspace } from '../exam/ExamWorkflow';
+import { Building2, Users, Beaker, GraduationCap, ClipboardCheck, TrendingUp, FileText, Calendar, Award, AlertTriangle, Clock, CheckSquare, Send, Plus, XCircle, ArrowLeft, RotateCcw, ListChecks } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import type { Student, Staff, TimetableEntry, Candidate, ApprovalRequest } from '../../data/types';
+import { StudentDetailModal } from '../../components/DetailModals';
+import { FacultyPerformanceModal } from './FacultyPerformanceModal';
 
 const TEACHING_ROLES = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
 const LUNCH_SLOTS = ['13:00-14:00'];
 const MAX_WEEKLY_HOURS = 44;
 const MAX_CONTINUOUS = 4;
 
-export function HodDashboard({ activeMenu }: { activeMenu: string }) {
+export function HodDashboard({ activeMenu, onNavigate }: { activeMenu: string; onNavigate?: (id: string) => void }) {
   const { currentUser } = useStore();
   const deptId = currentUser?.departmentId ?? '';
 
-  switch (activeMenu) {
-    case 'h-dept-info': return <DeptInfo deptId={deptId} />;
-    case 'h-faculty-list': return <StaffDirectory scopeDept={deptId} roles={TEACHING_ROLES} title="Department Faculty" />;
-    case 'h-labs': return <LabMgmt deptId={deptId} />;
-    case 'h-faculty-mgmt': return <StaffDirectory scopeDept={deptId} roles={TEACHING_ROLES} title="Faculty Directory" />;
-    case 'h-subject-alloc': return <SubjectAlloc deptId={deptId} />;
-    case 'h-workload': return <Workload deptId={deptId} />;
-    case 'h-mentoring': return <Mentoring deptId={deptId} />;
-    case 'h-perf': return <FacultyPerf deptId={deptId} />;
-    case 'h-students': return <StudentsDirectory scopeDept={deptId} editable />;
-    case 'h-attendance': return <AttendanceMonitor deptId={deptId} />;
-    case 'h-academic': return <AcademicPerfView deptId={deptId} />;
-    case 'h-project': return <ProjectProgress deptId={deptId} />;
-    case 'h-grievance': return <GrievancesPanel scopeDept={deptId} canAssign />;
-    case 'h-tt-create': return <TimetableEditor deptId={deptId} />;
-    case 'h-tt-lab': return <LabScheduling deptId={deptId} />;
-    case 'h-tt-conflict': return <ConflictDetection deptId={deptId} />;
-    case 'h-tt-publish': return <PublishTimetable deptId={deptId} />;
-    case 'h-exam-sched': return <ExamSched deptId={deptId} />;
-    case 'h-internal': return <InternalAssess deptId={deptId} />;
-    case 'h-invig': return <Invigilator deptId={deptId} />;
-    case 'h-marks': return <MarksMonitor deptId={deptId} />;
-    case 'h-exam-att': return <ExamAttendanceView deptId={deptId} />;
-    case 'h-syllabus': return <SyllabusProgressView scopeDept={deptId} />;
-    case 'h-fac-progress': return <FacultySyllabusProgress deptId={deptId} />;
-    case 'h-unit': return <UnitTracking deptId={deptId} />;
-    case 'h-delayed': return <DelayedSubjects deptId={deptId} />;
+switch (activeMenu) {
+    case 'h-apply-leave': return <LeaveManagementView />;
+    case 'h-dept-mgmt': return <DepartmentManagement deptId={deptId} />;
+    case 'h-faculty-mgmt': return <FacultyManagement deptId={deptId} onNavigate={onNavigate} />;
+    case 'h-student-mgmt': return <StudentManagement deptId={deptId} />;
+    case 'h-tt-create':
+    case 'h-tt-lab':
+    case 'h-tt-conflict':
+    case 'h-tt-publish':
+      return <TimetableWorkspace deptId={deptId} />;
+    case 'h-subject-alloc':
+      return <SubjectAllocationWorkspace deptId={deptId} />;
+    case 'h-recruit': return <RecruitmentShortlist deptId={deptId} />;
+    case 'h-examination-management': return <ExaminationManagementWorkspace deptId={deptId} />;
+    case 'h-assessment-marks': return <AssessmentMarksWorkspace deptId={deptId} />;
+    case 'h-syllabus': return <SyllabusTracking deptId={deptId} />;
     case 'h-extra': return <ExtraClasses deptId={deptId} />;
-    case 'h-sub-result': return <SubjectResult deptId={deptId} />;
-    case 'h-student-perf': return <StudentPerf deptId={deptId} />;
-    case 'h-top': return <TopPerformers deptId={deptId} />;
-    case 'h-failure': return <FailureAnalysis deptId={deptId} />;
-    case 'h-inbox': return <InboxView recipientRole="hod" recipientName={currentUser?.name ?? 'HOD'} />;
+    case 'h-results': return <ResultAnalysis deptId={deptId} />;
     default: return <HodHome deptId={deptId} />;
   }
 }
@@ -98,6 +88,27 @@ function HodHome({ deptId }: { deptId: string }) {
   );
 }
 
+/* Department Management — main menu hosting the sub-pages as tabs */
+const DEPT_TABS: TabDef[] = [
+  { id: 'dept-info', label: 'Department Information' },
+  { id: 'faculty-list', label: 'Faculty List' },
+  { id: 'labs', label: 'Laboratory Management' },
+  { id: 'resources', label: 'Resources' },
+];
+
+function DepartmentManagement({ deptId }: { deptId: string }) {
+  const [tab, setTab] = useState('dept-info');
+  return (
+    <div>
+      <Tabs tabs={DEPT_TABS} active={tab} onChange={setTab} />
+      {tab === 'dept-info' && <DeptInfo deptId={deptId} />}
+      {tab === 'faculty-list' && <StaffDirectory scopeDept={deptId} roles={TEACHING_ROLES} title="Department Faculty" />}
+      {tab === 'labs' && <LabMgmt deptId={deptId} />}
+      {tab === 'resources' && <ResourceManagement deptId={deptId} />}
+    </div>
+  );
+}
+
 function DeptInfo({ deptId }: { deptId: string }) {
   const { data } = useStore();
   const dept = data.departments.find((d) => d.id === deptId);
@@ -135,7 +146,20 @@ function LabMgmt({ deptId }: { deptId: string }) {
         columns={[
           { key: 'name', header: 'Lab', render: (l) => <span className="font-medium">{l.name}</span> },
           { key: 'capacity', header: 'Capacity' },
-          { key: 'inChargeId', header: 'In-Charge', render: (l) => staffName(data, l.inChargeId) },
+          {
+            key: 'inChargeId',
+            header: 'In-Charge',
+            render: (l) => {
+              const incharge = data.staff.find((s) => s.id === l.inChargeId);
+              if (!incharge) return <span className="text-slate-400">—</span>;
+              return (
+                <div className="max-w-[200px]" title={`${incharge.name} — ${incharge.designation}`}>
+                  <p className="text-sm font-medium text-slate-900 truncate">{incharge.name}</p>
+                  <p className="text-xs text-slate-500 truncate">{incharge.designation}</p>
+                </div>
+              );
+            },
+          },
           { key: 'subjects', header: 'Subjects', render: (l) => l.subjects.join(', ') },
           { key: 'systems', header: 'Systems' },
           { key: 'maintenanceStatus', header: 'Maintenance', render: (l) => <StatusBadge status={l.maintenanceStatus} /> },
@@ -145,22 +169,108 @@ function LabMgmt({ deptId }: { deptId: string }) {
   );
 }
 
-function SubjectAlloc({ deptId }: { deptId: string }) {
-  const { data } = useStore();
-  const subs = data.subjects.filter((s) => s.departmentId === deptId);
+function RecruitmentShortlist({ deptId }: { deptId: string }) {
+  const { data, updateApproval, addNotification } = useStore();
+  const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
+  const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+
+  const requests = data.approvals.filter(
+    (a) => a.type === 'recruitment' && a.submittedByRole === 'dean' && a.departmentId === deptId && a.status === 'pending'
+  );
+  const candidates = data.candidates.filter((c) => c.departmentId === deptId);
+
+  const toggleCandidate = (id: string) => {
+    setSelectedCandidates((prev) =>
+      prev.includes(id) ? prev.filter((cid) => cid !== id) : [...prev, id]
+    );
+  };
+
+  const submitShortlist = () => {
+    if (!selectedRequest) return;
+    updateApproval(selectedRequest.id, { shortlistedCandidateIds: selectedCandidates });
+    addNotification({
+      id: `n${Date.now()}`,
+      title: 'Candidate shortlist submitted',
+      message: `${selectedCandidates.length} candidate${selectedCandidates.length !== 1 ? 's' : ''} shortlisted for ${selectedRequest.title} and forwarded to the Dean for recommendation.`,
+      date: new Date().toISOString().slice(0, 10),
+      audience: ['dean'],
+      read: false,
+    });
+    setSelectedRequest(null);
+    setSelectedCandidates([]);
+  };
+
   return (
     <div>
-      <PageHeader title="Subject Allocation" description="Assign faculty to subjects each semester" />
-      <DataTable
-        rows={subs}
-        columns={[
-          { key: 'name', header: 'Subject', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'code', header: 'Code' },
-          { key: 'semester', header: 'Sem' },
-          { key: 'facultyId', header: 'Assigned Faculty', render: (s) => staffName(data, s.facultyId) },
-          { key: 'classes', header: 'Classes', render: (s) => s.classes.join(', ') },
-        ]}
-      />
+      <PageHeader title="Shortlist Candidates" description="Review candidates for faculty recruitment requests" />
+      <div className="grid lg:grid-cols-3 gap-6 mb-6">
+        <div className="card p-5 lg:col-span-1">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Recruitment Requests</h3>
+          <div className="space-y-3">
+            {requests.length === 0 && <p className="text-sm text-slate-400">No active recruitment requests from the Dean for your department.</p>}
+            {requests.map((request) => (
+              <button
+                key={request.id}
+                type="button"
+                onClick={() => {
+                  setSelectedRequest(request);
+                  setSelectedCandidates(request.shortlistedCandidateIds ?? []);
+                }}
+                className={`w-full text-left p-3 rounded-xl border ${selectedRequest?.id === request.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'} hover:border-blue-400 transition`}
+              >
+                <p className="font-medium text-slate-900">{request.title}</p>
+                <p className="text-xs text-slate-500">{request.date}</p>
+                <div className="mt-2 text-xs text-slate-600">{request.shortlistedCandidateIds?.length ?? 0} shortlisted</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="card p-5 lg:col-span-2">
+          {selectedRequest ? (
+            <>
+              <div className="mb-4">
+                <h3 className="text-base font-semibold text-slate-900">{selectedRequest.title}</h3>
+                <p className="text-sm text-slate-500">{selectedRequest.purpose}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="card p-3 bg-slate-50">
+                  <p className="text-xs text-slate-500">Required Qualification</p>
+                  <p className="text-sm text-slate-900 mt-1">{selectedRequest.details.qualification}</p>
+                </div>
+                <div className="card p-3 bg-slate-50">
+                  <p className="text-xs text-slate-500">Justification</p>
+                  <p className="text-sm text-slate-900 mt-1">{selectedRequest.details.justification}</p>
+                </div>
+              </div>
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3">Candidates</h4>
+                <div className="space-y-2">
+                  {candidates.map((candidate) => (
+                    <label key={candidate.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-blue-400 transition">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidates.includes(candidate.id)}
+                        onChange={() => toggleCandidate(candidate.id)}
+                        className="form-checkbox h-4 w-4 text-blue-600"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{candidate.name}</p>
+                        <p className="text-xs text-slate-500">{candidate.qualification} · {candidate.experience}</p>
+                      </div>
+                    </label>
+                  ))}
+                  {candidates.length === 0 && <p className="text-sm text-slate-400">No candidates available for your department.</p>}
+                </div>
+              </div>
+              <button className="btn-primary" onClick={submitShortlist} disabled={!selectedCandidates.length}>
+                Forward shortlist to Dean
+              </button>
+            </>
+          ) : (
+            <div className="text-sm text-slate-500">Select a recruitment request to shortlist candidates and forward the selected profiles to the Dean.</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -205,7 +315,28 @@ function Mentoring({ deptId }: { deptId: string }) {
   );
 }
 
-function FacultyPerf({ deptId }: { deptId: string }) {
+/* Faculty Management — main menu hosting the sub-pages as tabs */
+const FACULTY_TABS: TabDef[] = [
+  { id: 'faculty-perf', label: 'Faculty Performance' },
+  { id: 'subject-alloc', label: 'Subject Allocation' },
+  { id: 'workload', label: 'Teaching Workload' },
+  { id: 'mentoring', label: 'Mentoring Management' },
+];
+
+function FacultyManagement({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: string) => void }) {
+  const [tab, setTab] = useState('faculty-perf');
+  return (
+    <div>
+      <Tabs tabs={FACULTY_TABS} active={tab} onChange={setTab} />
+      {tab === 'faculty-perf' && <FacultyPerf deptId={deptId} onNavigate={onNavigate} />}
+      {tab === 'subject-alloc' && <SubjectAllocationWorkspace deptId={deptId} />}
+      {tab === 'workload' && <Workload deptId={deptId} />}
+      {tab === 'mentoring' && <Mentoring deptId={deptId} />}
+    </div>
+  );
+}
+
+function FacultyPerf({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: string) => void }) {
   const { data } = useStore();
   const [selected, setSelected] = useState<Staff | null>(null);
   const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
@@ -223,35 +354,79 @@ function FacultyPerf({ deptId }: { deptId: string }) {
         ]}
         onRowDoubleClick={(s) => setSelected(s)}
       />
-      <StaffDetailModal staff={selected} open={!!selected} onClose={() => setSelected(null)} />
+      <FacultyPerformanceModal staff={selected} open={!!selected} onClose={() => setSelected(null)} onNavigate={onNavigate} />
     </div>
   );
 }
 
-function AttendanceMonitor({ deptId }: { deptId: string }) {
+function SubjectAlloc({ deptId, onBack }: { deptId: string; onBack?: () => void }) {
   const { data } = useStore();
-  const [selected, setSelected] = useState<Student | null>(null);
+  const subs = data.subjects.filter((s) => s.departmentId === deptId);
+  return (
+    <div>
+      <PageHeader title="Subject Allocation" description="Assign faculty to subjects each semester" action={onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+          title="Back"
+          aria-label="Back to Faculty Performance"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+      )} />
+      <DataTable
+        rows={subs}
+        columns={[
+          { key: 'name', header: 'Subject', render: (s) => <span className="font-medium">{s.name}</span> },
+          { key: 'code', header: 'Code' },
+          { key: 'semester', header: 'Sem' },
+          { key: 'facultyId', header: 'Assigned Faculty', render: (s) => staffName(data, s.facultyId) },
+          { key: 'classes', header: 'Classes', render: (s) => s.classes.join(', ') },
+        ]}
+      />
+    </div>
+  );
+}
+
+/* Student Management — main menu hosting the sub-pages as tabs */
+const STUDENT_TABS: TabDef[] = [
+  { id: 'students', label: 'Student List' },
+  { id: 'academic', label: 'Academic Performance' },
+  { id: 'projects', label: 'Project / Assignment' },
+  { id: 'grievances', label: 'Student Grievances' },
+];
+
+function StudentManagement({ deptId }: { deptId: string }) {
+  const [tab, setTab] = useState('students');
+  return (
+    <div>
+      <Tabs tabs={STUDENT_TABS} active={tab} onChange={setTab} />
+      {tab === 'students' && <StudentsWithAttendance deptId={deptId} />}
+      {tab === 'academic' && <AcademicPerfView deptId={deptId} />}
+      {tab === 'projects' && <ProjectProgress deptId={deptId} />}
+      {tab === 'grievances' && <GrievancesPanel scopeDept={deptId} canAssign />}
+    </div>
+  );
+}
+
+function StudentsWithAttendance({ deptId }: { deptId: string }) {
+  const { data } = useStore();
   const students = data.students.filter((s) => s.departmentId === deptId);
   return (
     <div>
-      <PageHeader title="Attendance Monitoring" description="Department attendance — identify students below threshold" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Dept Average" value={`${Math.round(students.reduce((a, s) => a + s.attendancePct, 0) / students.length)}%`} icon={<TrendingUp className="w-5 h-5" />} accent="blue" />
-        <StatCard label="Above 75%" value={students.filter((s) => s.attendancePct >= 75).length} icon={<CheckSquare className="w-5 h-5" />} accent="emerald" />
-        <StatCard label="Below 75%" value={students.filter((s) => s.attendancePct < 75).length} icon={<AlertTriangle className="w-5 h-5" />} accent="rose" />
-        <StatCard label="Below 70%" value={students.filter((s) => s.attendancePct < 70).length} icon={<AlertTriangle className="w-5 h-5" />} accent="amber" />
-      </div>
-      <DataTable
-        rows={[...students].sort((a, b) => a.attendancePct - b.attendancePct)}
-        columns={[
-          { key: 'name', header: 'Student', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'rollNo', header: 'Roll No' },
-          { key: 'semester', header: 'Sem' },
-          { key: 'attendancePct', header: 'Attendance', render: (s) => <span className={s.attendancePct < 75 ? 'text-rose-600 font-semibold' : ''}>{s.attendancePct}%</span> },
-        ]}
-        onRowDoubleClick={(s) => setSelected(s)}
+      <StudentsDirectory
+        scopeDept={deptId}
+        editable
+        extraStats={
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <StatCard label="Dept Average" value={`${Math.round(students.reduce((a, s) => a + s.attendancePct, 0) / students.length)}%`} icon={<TrendingUp className="w-5 h-5" />} accent="blue" />
+            <StatCard label="Above 75%" value={students.filter((s) => s.attendancePct >= 75).length} icon={<CheckSquare className="w-5 h-5" />} accent="emerald" />
+            <StatCard label="Below 75%" value={students.filter((s) => s.attendancePct < 75).length} icon={<AlertTriangle className="w-5 h-5" />} accent="rose" />
+            <StatCard label="Below 70%" value={students.filter((s) => s.attendancePct < 70).length} icon={<AlertTriangle className="w-5 h-5" />} accent="amber" />
+          </div>
+        }
       />
-      <StudentDetailModal student={selected} open={!!selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
@@ -775,6 +950,27 @@ function ExamAttendanceView({ deptId }: { deptId: string }) {
   );
 }
 
+/* Syllabus Tracking — main menu hosting the sub-pages as tabs */
+const SYLLABUS_TABS: TabDef[] = [
+  { id: 'overview', label: 'Syllabus Overview' },
+  { id: 'fac-progress', label: 'Faculty-wise Progress' },
+  { id: 'unit', label: 'Unit / Topic Tracking' },
+  { id: 'delayed', label: 'Delayed Subjects' },
+];
+
+function SyllabusTracking({ deptId }: { deptId: string }) {
+  const [tab, setTab] = useState('overview');
+  return (
+    <div>
+      <Tabs tabs={SYLLABUS_TABS} active={tab} onChange={setTab} />
+      {tab === 'overview' && <SyllabusProgressView scopeDept={deptId} />}
+      {tab === 'fac-progress' && <FacultySyllabusProgress deptId={deptId} />}
+      {tab === 'unit' && <UnitTracking deptId={deptId} />}
+      {tab === 'delayed' && <DelayedSubjects deptId={deptId} />}
+    </div>
+  );
+}
+
 function FacultySyllabusProgress({ deptId }: { deptId: string }) {
   const { data } = useStore();
   const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
@@ -851,6 +1047,52 @@ function ExtraClasses({ deptId }: { deptId: string }) {
           { key: 'action', header: 'Action', render: () => <span className="badge bg-amber-100 text-amber-700">Eligible</span> },
         ]}
       />
+    </div>
+  );
+}
+
+/* Result Analysis — main menu hosting the sub-pages as tabs */
+interface TabDef {
+  id: string;
+  label: string;
+}
+
+function Tabs({ tabs, active, onChange }: { tabs: TabDef[]; active: string; onChange: (id: string) => void }) {
+  return (
+    <div className="border-b border-slate-200 mb-6 flex items-center justify-between gap-3">
+      <div className="flex gap-1 overflow-x-auto">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            className={`px-4 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              active === t.id ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const RESULT_TABS: TabDef[] = [
+  { id: 'sub-result', label: 'Subject-wise Analysis' },
+  { id: 'student-perf', label: 'Student Performance' },
+  { id: 'top', label: 'Top Performers' },
+  { id: 'failure', label: 'Failure & Backlog' },
+];
+
+function ResultAnalysis({ deptId }: { deptId: string }) {
+  const [tab, setTab] = useState('sub-result');
+  return (
+    <div>
+      <Tabs tabs={RESULT_TABS} active={tab} onChange={setTab} />
+      {tab === 'sub-result' && <SubjectResult deptId={deptId} />}
+      {tab === 'student-perf' && <StudentPerf deptId={deptId} />}
+      {tab === 'top' && <TopPerformers deptId={deptId} />}
+      {tab === 'failure' && <FailureAnalysis deptId={deptId} />}
     </div>
   );
 }

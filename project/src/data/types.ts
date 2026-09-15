@@ -83,6 +83,8 @@ export interface Student {
   discipline: { id: string; incident: string; date: string; action: string; status: string }[];
 }
 
+export type SubjectType = 'theory' | 'laboratory' | 'seminar' | 'special';
+
 export interface Subject {
   id: string;
   name: string;
@@ -94,6 +96,11 @@ export interface Subject {
   unitsTotal: number;
   unitsCompleted: number;
   classes: string[];
+  /* Subject Allocation enrichment */
+  type: SubjectType;
+  credits: number;
+  weeklyHrs: number;
+  suggestedResources?: ResourceCategory[];
 }
 
 export interface TimetableEntry {
@@ -121,7 +128,7 @@ export interface ApprovalDoc {
 
 export interface ApprovalRequest {
   id: string;
-  type: 'timetable' | 'leave' | 'event' | 'budget' | 'purchase' | 'recruitment' | 'promotion';
+  type: 'timetable' | 'leave' | 'event' | 'budget' | 'purchase' | 'recruitment' | 'promotion' | 'syllabus' | 'result';
   title: string;
   submittedBy: string;
   submittedByRole: Role;
@@ -133,6 +140,9 @@ export interface ApprovalRequest {
   deanStatus?: 'pending' | 'recommended' | 'rejected';
   deanRemarks?: string;
   principalRemarks?: string;
+  hodStatus?: 'pending' | 'recommended' | 'rejected';
+  hodRemarks?: string;
+  shortlistedCandidateIds?: string[];
   details: Record<string, string>;
   documents: ApprovalDoc[];
   timetableEntries?: TimetableEntry[];
@@ -204,6 +214,18 @@ export interface ExamSchedule {
   subject: string;
   hall: string;
   invigilatorId: string;
+  invigilatorIds?: string[];
+  status?: 'draft' | 'pending-dean' | 'pending-principal' | 'rejected' | 'published';
+  rejectionRemarks?: string;
+  notes?: string;
+  academicYear?: string;
+  examType?: string;
+  facultyId?: string;
+  marksSubmissionDeadline?: string;
+  marksEntered?: number;
+  marksSubmitted?: boolean;
+  attendanceSubmittedBy?: string;
+  attendanceSubmittedOn?: string;
 }
 
 export interface Notification {
@@ -212,6 +234,7 @@ export interface Notification {
   message: string;
   date: string;
   audience: Role[];
+  targetUserIds?: string[];
   read: boolean;
 }
 
@@ -313,6 +336,125 @@ export interface NonTeachingTask {
   date: string;
 }
 
+/* ========== RESOURCE MANAGEMENT ========== */
+export type ResourceCategory =
+  | 'classroom'
+  | 'computer'
+  | 'projector'
+  | 'smart-board'
+  | 'furniture'
+  | 'teaching-equipment'
+  | 'book'
+  | 'other-equipment';
+
+export type ResourceStatus =
+  | 'available'
+  | 'in-use'
+  | 'under-maintenance'
+  | 'damaged'
+  | 'retired';
+
+export interface Resource {
+  id: string;
+  name: string;
+  category: ResourceCategory;
+  departmentId: string;
+  location: string;
+  status: ResourceStatus;
+  isLab: boolean;
+  capacity?: number;
+  equipment?: { name: string; qty: number; status: 'available' | 'under-repair' }[];
+}
+
+export interface ResourceAllocation {
+  id: string;
+  resourceId: string;
+  allocatedTo: string;   /* staffId */
+  date: string;          /* YYYY-MM-DD */
+  fromTime: string;      /* "09:00" */
+  toTime: string;        /* "11:00" */
+}
+
+export interface MaintenanceRequest {
+  id: string;
+  resourceId: string;
+  requestedBy: string;   /* HOD staffId */
+  assignedTo: string;    /* lab-assistant staffId */
+  description: string;
+  status: 'pending' | 'in-progress' | 'completed';
+  progress: number;      /* 0-100 */
+  date: string;
+}
+
+export interface ResourceRequest {
+  id: string;
+  resourceName: string;
+  category: ResourceCategory;
+  departmentId: string;
+  requestedBy: string;
+  date: string;
+  status: 'pending' | 'approved' | 'rejected';
+  notes: string;
+}
+
+export interface ResourceHistory {
+  id: string;
+  resourceId: string;
+  action: 'allocated' | 'returned' | 'maintenance' | 'maintenance-completed' | 'damaged' | 'retired';
+  date: string;
+  staffId?: string;
+  details: string;
+}
+
+/* ========== SUBJECT ALLOCATION (central academic allocation layer) ========== */
+export type AllocationStatus = 'pending' | 'partially-allocated' | 'allocated' | 'conflict' | 'draft';
+
+/**
+ * One subject allocation = Subject + Faculty + Class/Sections + Required Resources.
+ * This is the source of truth used by Timetable, Faculty Dashboard and Resource
+ * Management. Timetable adds day/time on top of this allocation (never repeats it).
+ */
+export interface SubjectAllocation {
+  id: string;
+  subjectId: string;
+  departmentId: string;
+  semester: number;
+  academicYear: string;
+  classIds: string[];            /* section letters, e.g. ['A','B'] → 3A, 3B */
+  facultyId: string | null;      /* assigned faculty (null until chosen) */
+  resourceIds: string[];         /* preferred / assigned resources */
+  requiredTypes: ResourceCategory[]; /* resource categories required for this subject */
+  status: AllocationStatus;
+  weeklyHours: number;
+  createdBy: string;             /* staffId of the HOD */
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AllocationChangeType =
+  | 'created'
+  | 'draft-saved'
+  | 'confirmed'
+  | 'faculty-changed'
+  | 'resource-changed'
+  | 'class-added'
+  | 'class-removed'
+  | 'resource-added'
+  | 'resource-removed'
+  | 'status-changed';
+
+export interface AllocationHistory {
+  id: string;
+  allocationId: string;
+  subjectId: string;
+  date: string;
+  changeType: AllocationChangeType;
+  previous: string;
+  current: string;
+  changedBy: string;
+  reason?: string;
+}
+
 export interface AppData {
   departments: Department[];
   staff: Staff[];
@@ -336,4 +478,11 @@ export interface AppData {
   rooms: { id: string; name: string; departmentId: string; capacity: number }[];
   complaints: Complaint[];
   nonTeachingTasks: NonTeachingTask[];
+  resources: Resource[];
+  resourceAllocations: ResourceAllocation[];
+  maintenanceRequests: MaintenanceRequest[];
+  resourceRequests: ResourceRequest[];
+  resourceHistory: ResourceHistory[];
+  subjectAllocations: SubjectAllocation[];
+  allocationHistory: AllocationHistory[];
 }

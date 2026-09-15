@@ -2,12 +2,13 @@ import { useStore, deptName, deptCode, staffName, roleLabels } from '../../store
 import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
-import { StudentsDirectory, StaffDirectory, ApprovalsPanel, GrievancesPanel, SyllabusProgressView, TimetableView, Placeholder, LiaisonView } from '../../components/SharedViews';
-import { GraduationCap, Users, BookOpen, CheckSquare, Building2, Users2, Award, TrendingUp, ShieldCheck, FileText, Calendar, ClipboardList, Clock, Bell, ChevronLeft, ChevronRight, Eye, Download } from 'lucide-react';
+import { StudentsDirectory, StaffDirectory, ApprovalsPanel, GrievancesPanel, SyllabusProgressView, TimetableView, Placeholder, LiaisonView, LeaveManagementView } from '../../components/SharedViews';
+import { GraduationCap, Users, BookOpen, CheckSquare, Building2, Users2, Award, TrendingUp, ShieldCheck, FileText, Calendar, ClipboardList, Clock, Bell, ChevronLeft, ChevronRight, Eye, Download, Layers, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import type { Student, Staff, Role } from '../../data/types';
 import { StudentDetailModal, StaffDetailModal } from '../../components/DetailModals';
 import { Modal } from '../../components/Modal';
+import { ExaminationReviewWorkspace } from '../exam/ExamWorkflow';
 
 const TEACHING_ROLES: Role[] = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
 const NON_TEACHING_ROLES: Role[] = ['office-superintendent', 'lab-assistant'];
@@ -35,7 +36,9 @@ function staffSyllabusAvg(data: ReturnType<typeof useStore>['data'], staffId: st
 }
 
 export function PrincipalDashboard({ activeMenu }: { activeMenu: string }) {
-  switch (activeMenu) {
+switch (activeMenu) {
+    case 'p-apply-leave': return <LeaveManagementView />;
+    case 'p-exam-approvals': return <ExaminationReviewWorkspace reviewer="principal" />;
     case 'p-curriculum': return <CurriculumOverview />;
     case 'p-subject-alloc': return <SubjectAllocation />;
     case 'p-calendar': return <AcademicCalendar />;
@@ -45,7 +48,7 @@ export function PrincipalDashboard({ activeMenu }: { activeMenu: string }) {
     case 'p-performance': return <FacultyPerformance />;
     case 'p-workload': return <WorkloadView />;
     case 'p-daily-ops': return <DailyOperations />;
-    case 'p-students': return <StudentsDirectory classFilter courseFilter />;
+    case 'p-students': return <StudentsDirectory classFilter courseFilter showAttendanceStats />;
     case 'p-attendance': return <AttendanceReport />;
     case 'p-academic': return <AcademicPerformance />;
     case 'p-discipline': return <DisciplineCases />;
@@ -65,7 +68,12 @@ export function PrincipalDashboard({ activeMenu }: { activeMenu: string }) {
 function PrincipalHome() {
   const { data } = useStore();
   const teaching = data.staff.filter((s) => TEACHING_ROLES.includes(s.role));
-  const pendingApprovals = data.approvals.filter((a) => a.status !== 'approved' && a.status !== 'rejected').length;
+  const actionableApprovals = data.approvals.filter((a) =>
+    a.status !== 'approved' &&
+    a.status !== 'rejected' &&
+    (a.type === 'recruitment' || a.type === 'promotion' ? a.status === 'dean-recommended' : true)
+  );
+  const pendingApprovals = actionableApprovals.length;
   const lowAtt = data.students.filter((s) => s.attendancePct < 75).length;
   return (
     <div>
@@ -100,7 +108,7 @@ function PrincipalHome() {
         <div className="card p-5">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Recent Approval Requests</h3>
           <div className="space-y-3">
-            {data.approvals.filter((a) => a.status !== 'approved' && a.status !== 'rejected').slice(0, 5).map((a) => (
+            {actionableApprovals.slice(0, 5).map((a) => (
               <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                 <div>
                   <p className="text-sm font-medium text-slate-900">{a.title}</p>
@@ -119,15 +127,32 @@ function PrincipalHome() {
 function CurriculumOverview() {
   const { data } = useStore();
   const [deptId, setDeptId] = useState<string>('all');
+  const [showAcademicCalendar, setShowAcademicCalendar] = useState(false);
   const subs = deptId === 'all' ? data.subjects : data.subjects.filter((s) => s.departmentId === deptId);
   const avg = subs.length ? Math.round(subs.reduce((a, s) => a + s.syllabusCompletion, 0) / subs.length) : 0;
+
+  if (showAcademicCalendar) {
+    return <AcademicCalendar onBack={() => setShowAcademicCalendar(false)} />;
+  }
+
   return (
     <div>
       <PageHeader title="Curriculum Overview" description="Ensure university-prescribed curriculum is carried out effectively" action={
-        <select className="input w-auto" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
-          <option value="all">All Departments</option>
-          {data.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
+        <div className="flex items-center gap-2">
+          <select className="input w-auto" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+            <option value="all">All Departments</option>
+            {data.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowAcademicCalendar(true)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+            title="Academic Calendar"
+            aria-label="Open academic calendar"
+          >
+            <Calendar className="h-4 w-4" />
+          </button>
+        </div>
       } />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Subjects" value={subs.length} icon={<BookOpen className="w-5 h-5" />} accent="blue" />
@@ -153,11 +178,21 @@ function CurriculumOverview() {
   );
 }
 
-function SubjectAllocation() {
+function SubjectAllocation({ onBack }: { onBack?: () => void }) {
   const { data } = useStore();
   return (
     <div>
-      <PageHeader title="Subject Allocation" description="Review faculty-subject assignments across departments" />
+      <PageHeader title="Subject Allocation" description="Review faculty-subject assignments across departments" action={onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+          title="Back"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+      )} />
       <DataTable
         rows={data.subjects}
         columns={[
@@ -173,8 +208,9 @@ function SubjectAllocation() {
   );
 }
 
-function AcademicCalendar() {
+function AcademicCalendar({ onBack }: { onBack?: () => void }) {
   const { data } = useStore();
+  const [showSubjectAllocation, setShowSubjectAllocation] = useState(false);
   const [view, setView] = useState<'month' | 'timeline'>('month');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterDept, setFilterDept] = useState<string>('all');
@@ -240,10 +276,25 @@ function AcademicCalendar() {
 
   const todayDate = new Date().toISOString().slice(0, 10);
 
+  if (showSubjectAllocation) {
+    return <SubjectAllocation onBack={() => setShowSubjectAllocation(false)} />;
+  }
+
   return (
     <div>
       <PageHeader title="Academic Calendar" description="Institution-wide academic schedule with events, exams, and holidays" action={
         <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+              title="Back"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
           <div className="flex rounded-lg border border-slate-300 overflow-hidden">
             <button className={`px-3 py-2 text-sm font-medium ${view === 'month' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`} onClick={() => setView('month')}>Month</button>
             <button className={`px-3 py-2 text-sm font-medium ${view === 'timeline' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`} onClick={() => setView('timeline')}>Timeline</button>
@@ -289,6 +340,15 @@ function AcademicCalendar() {
                 <option value="all">All Semesters</option>
                 {[1, 2, 3, 4, 5, 6].map((s) => <option key={s} value={String(s)}>Sem {s}</option>)}
               </select>
+              <button
+                type="button"
+                onClick={() => setShowSubjectAllocation(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                title="Subject Allocation"
+                aria-label="Open subject allocation"
+              >
+                <Layers className="h-4 w-4" />
+              </button>
               {(filterType !== 'all' || filterDept !== 'all' || filterSem !== 'all') && (
                 <button className="text-xs text-blue-600 hover:underline" onClick={() => { setFilterType('all'); setFilterDept('all'); setFilterSem('all'); }}>Clear filters</button>
               )}
@@ -458,6 +518,7 @@ function TimetableApprovalView() {
                     <div key={t.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 text-xs">
                       <span className="font-medium">{t.day} · {t.slot}</span>
                       <span>{t.subject} · {t.section} Sem {t.semester}</span>
+                      <span className="text-slate-700 font-medium">{staffName(data, t.facultyId)}</span>
                       <span className="text-slate-500">{t.room}</span>
                     </div>
                   ))}
@@ -476,41 +537,24 @@ function TimetableApprovalView() {
   );
 }
 
-function nonTeachingPerformance(data: ReturnType<typeof useStore>['data'], staffId: string): number {
-  const tasks = data.nonTeachingTasks.filter((t) => t.staffId === staffId);
-  if (!tasks.length) return 0;
-  const completed = tasks.filter((t) => t.status === 'completed').length;
-  return Math.round((completed / tasks.length) * 100);
-}
-
 function FacultyPerformance() {
   const { data } = useStore();
-  const [tab, setTab] = useState<'teaching' | 'nonteaching'>('teaching');
   const [deptId, setDeptId] = useState<string>('all');
   const [selected, setSelected] = useState<Staff | null>(null);
 
-  const roles = tab === 'teaching' ? TEACHING_ROLES : NON_TEACHING_ROLES;
-  const staff = data.staff.filter((s) => roles.includes(s.role) && (tab !== 'teaching' || deptId === 'all' || s.departmentId === deptId));
+  const staff = data.staff.filter((s) => TEACHING_ROLES.includes(s.role) && (deptId === 'all' || s.departmentId === deptId));
 
   return (
     <div>
       <PageHeader title="Faculty Performance" description="Monitor teaching quality and work progress across faculty" action={
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-slate-300 overflow-hidden">
-            <button className={`px-3 py-2 text-sm font-medium ${tab === 'teaching' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`} onClick={() => setTab('teaching')}>Teaching Staff</button>
-            <button className={`px-3 py-2 text-sm font-medium ${tab === 'nonteaching' ? 'bg-blue-600 text-white' : 'bg-white text-slate-700'}`} onClick={() => setTab('nonteaching')}>Non-Teaching Staff</button>
-          </div>
-          {tab === 'teaching' && (
-            <select className="input w-auto" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
-              <option value="all">All Departments</option>
-              {data.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )}
-        </div>
+        <select className="input w-auto" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+          <option value="all">All Departments</option>
+          {data.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
       } />
       <DataTable
         rows={staff}
-        columns={tab === 'teaching' ? [
+        columns={[
           { key: 'name', header: 'Name', render: (s) => <span className="font-medium text-slate-900">{s.name}</span> },
           { key: 'designation', header: 'Designation' },
           { key: 'departmentId', header: 'Department', render: (s) => {
@@ -521,15 +565,6 @@ function FacultyPerformance() {
           { key: 'attendancePct', header: 'Attendance', render: (s) => `${s.attendancePct}%` },
           { key: 'feedbackScore', header: 'Feedback', render: (s) => s.feedbackScore ? `${s.feedbackScore}/5` : '—' },
           { key: 'performanceRating', header: 'Rating', render: (s) => s.performanceRating ? `${s.performanceRating}/5` : '—' },
-          { key: 'pendingWork', header: 'Pending', render: (s) => <span className={s.pendingWork > 1 ? 'text-amber-600 font-semibold' : ''}>{s.pendingWork}</span> },
-        ] : [
-          { key: 'name', header: 'Name', render: (s) => <span className="font-medium text-slate-900">{s.name}</span> },
-          { key: 'designation', header: 'Designation', render: (s) => {
-            const perf = nonTeachingPerformance(data, s.id);
-            const c = syllabusColor(perf || (s.pendingWork === 0 ? 100 : 60));
-            return <button onClick={() => setSelected(s)} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${c.bg} ${c.text} hover:opacity-80 transition-opacity`}><span className={`w-2 h-2 rounded-full ${c.dot}`} />{s.designation}</button>;
-          } },
-          { key: 'attendancePct', header: 'Attendance', render: (s) => `${s.attendancePct}%` },
           { key: 'pendingWork', header: 'Pending', render: (s) => <span className={s.pendingWork > 1 ? 'text-amber-600 font-semibold' : ''}>{s.pendingWork}</span> },
         ]}
         onRowDoubleClick={(s) => setSelected(s)}

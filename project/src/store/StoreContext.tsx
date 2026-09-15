@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { AppData, Role, Staff, Student, ApprovalRequest, Grievance, Message, TimetableEntry, Notification, Policy, Complaint, NonTeachingTask } from '../data/types';
+import type { AppData, Role, Staff, Student, Subject, Candidate, ApprovalRequest, Grievance, Message, TimetableEntry, Notification, Policy, Complaint, NonTeachingTask, Resource, ResourceAllocation, MaintenanceRequest, ResourceRequest, ResourceHistory, ExamSchedule, ExamAttendanceRecord, SubjectAllocation, AllocationHistory } from '../data/types';
 import { sampleData } from '../data/sampleData';
 
 interface StoreContextValue {
@@ -9,7 +9,9 @@ interface StoreContextValue {
   logout: () => void;
   updateStudent: (id: string, patch: Partial<Student>) => void;
   updateStaff: (id: string, patch: Partial<Staff>) => void;
+  updateCandidate: (id: string, patch: Partial<Candidate>) => void;
   updateApproval: (id: string, patch: Partial<ApprovalRequest>) => void;
+  addApproval: (approval: ApprovalRequest) => void;
   updateGrievance: (id: string, patch: Partial<Grievance>) => void;
   addGrievance: (g: Grievance) => void;
   markNotificationRead: (id: string) => void;
@@ -27,6 +29,20 @@ interface StoreContextValue {
   addComplaint: (c: Complaint) => void;
   updateComplaint: (id: string, patch: Partial<Complaint>) => void;
   updateNonTeachingTask: (id: string, patch: Partial<NonTeachingTask>) => void;
+  updateResource: (id: string, patch: Partial<Resource>) => void;
+  addResource: (r: Resource) => void;
+  allocateResource: (a: ResourceAllocation) => void;
+  addMaintenanceRequest: (m: MaintenanceRequest) => void;
+  updateMaintenanceRequest: (id: string, patch: Partial<MaintenanceRequest>) => void;
+  addResourceRequest: (r: ResourceRequest) => void;
+  addResourceHistory: (h: ResourceHistory) => void;
+  updateSubject: (id: string, patch: Partial<Subject>) => void;
+  saveSubjectAllocation: (a: SubjectAllocation) => void;
+  removeSubjectAllocation: (id: string) => void;
+  addAllocationHistory: (h: AllocationHistory) => void;
+  addExam: (exam: ExamSchedule) => void;
+  updateExam: (id: string, patch: Partial<ExamSchedule>) => void;
+  saveExamAttendance: (examId: string, records: ExamAttendanceRecord[], markedBy: string) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -49,8 +65,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, students: d.students.map((s) => (s.id === id ? { ...s, ...patch } : s)) })),
     updateStaff: (id, patch) =>
       setData((d) => ({ ...d, staff: d.staff.map((s) => (s.id === id ? { ...s, ...patch } : s)) })),
+    updateCandidate: (id, patch) =>
+      setData((d) => ({ ...d, candidates: d.candidates.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
     updateApproval: (id, patch) =>
       setData((d) => ({ ...d, approvals: d.approvals.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
+    addApproval: (approval) =>
+      setData((d) => ({ ...d, approvals: [approval, ...d.approvals] })),
     updateGrievance: (id, patch) =>
       setData((d) => ({ ...d, grievances: d.grievances.map((g) => (g.id === id ? { ...g, ...patch } : g)) })),
     addGrievance: (g) => setData((d) => ({ ...d, grievances: [g, ...d.grievances] })),
@@ -84,6 +104,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, complaints: d.complaints.map((c) => (c.id === id ? { ...c, ...patch } : c)) })),
     updateNonTeachingTask: (id, patch) =>
       setData((d) => ({ ...d, nonTeachingTasks: d.nonTeachingTasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+    updateResource: (id, patch) =>
+      setData((d) => ({ ...d, resources: d.resources.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
+    addResource: (r) => setData((d) => ({ ...d, resources: [r, ...d.resources] })),
+    allocateResource: (a) => setData((d) => ({ ...d, resourceAllocations: [a, ...d.resourceAllocations] })),
+    addMaintenanceRequest: (m) => setData((d) => ({ ...d, maintenanceRequests: [m, ...d.maintenanceRequests] })),
+    updateMaintenanceRequest: (id, patch) =>
+      setData((d) => ({ ...d, maintenanceRequests: d.maintenanceRequests.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
+    addResourceRequest: (r) => setData((d) => ({ ...d, resourceRequests: [r, ...d.resourceRequests] })),
+    addResourceHistory: (h) => setData((d) => ({ ...d, resourceHistory: [h, ...d.resourceHistory] })),
+    updateSubject: (id, patch) =>
+      setData((d) => ({ ...d, subjects: d.subjects.map((s) => (s.id === id ? { ...s, ...patch } : s)) })),
+    saveSubjectAllocation: (a) =>
+      setData((d) => ({ ...d, subjectAllocations: d.subjectAllocations.some((x) => x.id === a.id) ? d.subjectAllocations.map((x) => (x.id === a.id ? a : x)) : [a, ...d.subjectAllocations] })),
+    removeSubjectAllocation: (id) =>
+      setData((d) => ({ ...d, subjectAllocations: d.subjectAllocations.filter((x) => x.id !== id) })),
+    addAllocationHistory: (h) =>
+      setData((d) => ({ ...d, allocationHistory: [h, ...d.allocationHistory] })),
+    addExam: (exam) => setData((d) => ({ ...d, exams: [exam, ...d.exams] })),
+    updateExam: (id, patch) => setData((d) => ({ ...d, exams: d.exams.map((e) => e.id === id ? { ...e, ...patch } : e) })),
+    saveExamAttendance: (examId, records, markedBy) => setData((d) => ({
+      ...d,
+      exams: d.exams.map((e) => e.id === examId ? { ...e, attendanceSubmittedBy: markedBy, attendanceSubmittedOn: new Date().toLocaleString() } : e),
+      examAttendance: [...d.examAttendance.filter((r) => r.examId !== examId), ...records],
+    })),
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
