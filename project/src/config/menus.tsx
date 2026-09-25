@@ -44,9 +44,6 @@ principal: [
   ],
 dean: [
       { id: 'd-curriculum', label: 'Curriculum Oversight', icon: BookOpen },
-      { id: 'd-syllabus', label: 'Syllabus Progress', icon: BarChart3 },
-      { id: 'd-faculty-progress', label: 'Faculty Teaching Progress', icon: TrendingUp },
-      { id: 'd-remarks', label: 'Remarks & Reports', icon: FileText },
       { id: 'd-faculty-recruitment', label: 'Faculty Recruitment', icon: UserCheck },
       { id: 'd-teaching-q', label: 'Teaching Standards', icon: Award },
       { id: 'd-results', label: 'Result Analysis', icon: BarChart3 },
@@ -59,10 +56,10 @@ dean: [
   ],
 hod: [
        { id: 'h-dashboard', label: 'Dashboard', icon: BarChart3 },
-       { id: 'h-faculty', label: 'Faculty Management', icon: Users },
-       { id: 'h-student-mgmt', label: 'Student Management', icon: GraduationCap },
-      { id: 'h-resource-management', label: 'Resource Management', icon: Wrench },
-      { id: 'h-academic-management', label: 'Academic Management', icon: BookOpen },
+       { id: 'h-faculty', label: 'Faculty', icon: Users },
+       { id: 'h-student-mgmt', label: 'Student', icon: GraduationCap },
+      { id: 'h-resource-management', label: 'Resource', icon: Wrench },
+      { id: 'h-academic-management', label: 'Examination', icon: BookOpen },
       { id: 'h-apply-leave', label: 'Apply for Leave', icon: Calendar },
   ],
 professor: [

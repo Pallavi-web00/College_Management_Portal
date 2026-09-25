@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { AppData, Role, Staff, Student, Subject, Candidate, ApprovalRequest, Grievance, Message, TimetableEntry, Notification, Policy, Complaint, NonTeachingTask, Resource, ResourceAllocation, MaintenanceRequest, ResourceRequest, ResourceHistory, ExamSchedule, ExamAttendanceRecord, SubjectAllocation, AllocationHistory, MentorAllocation, MentoringHistory, AssignedTask, WorkloadSettings } from '../data/types';
 import { sampleData } from '../data/sampleData';
+import { validateTimetableEntry } from '../roles/hod/timetableLogic';
 
 interface StoreContextValue {
   data: AppData;
@@ -87,8 +88,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setData((d) => ({ ...d, messages: d.messages.map((m) => (m.id === id ? { ...m, read: true } : m)) })),
     messages: data.messages,
     updateTimetableEntry: (id, patch) =>
-      setData((d) => ({ ...d, timetable: d.timetable.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
-    addTimetableEntry: (t) => setData((d) => ({ ...d, timetable: [...d.timetable, t] })),
+      setData((d) => {
+        const current = d.timetable.find((t) => t.id === id);
+        if (!current) return d;
+        const next = { ...current, ...patch };
+        return validateTimetableEntry(d, next, d.timetable, id).valid
+          ? { ...d, timetable: d.timetable.map((t) => (t.id === id ? next : t)) }
+          : d;
+      }),
+    addTimetableEntry: (t) =>
+      setData((d) => validateTimetableEntry(d, t).valid ? { ...d, timetable: [...d.timetable, t] } : d),
     publishTimetable: (deptId, section, semester) =>
       setData((d) => ({ ...d, timetable: d.timetable.map((t) => (t.departmentId === deptId && t.section === section && t.semester === semester ? { ...t, published: true } : t)) })),
     submitTimetableForApproval: (approvalId) =>

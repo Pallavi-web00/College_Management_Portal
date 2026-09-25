@@ -12,10 +12,10 @@ const SLOT_DETAILS = [
 ] as const;
 
 const departments: Department[] = [
-  { id: 'd1', name: 'Bachelor of Computer Applications', code: 'BCA', hodId: 's3', email: 'hod.bca@college.edu', contact: '9876543210', facultyCount: 4, studentCount: 13, labCount: 2, classroomCount: 3 },
-  { id: 'd2', name: 'Bachelor of Commerce', code: 'B.Com.', hodId: 's7', email: 'hod.bcom@college.edu', contact: '9876543220', facultyCount: 4, studentCount: 6, labCount: 1, classroomCount: 2 },
-  { id: 'd3', name: 'Bachelor of Science', code: 'B.Sc.', hodId: 's11', email: 'hod.bsc@college.edu', contact: '9876543230', facultyCount: 4, studentCount: 6, labCount: 2, classroomCount: 2 },
-  { id: 'd4', name: 'Bachelor of Arts', code: 'B.A.', hodId: 's15', email: 'hod.ba@college.edu', contact: '9876543240', facultyCount: 4, studentCount: 6, labCount: 1, classroomCount: 2 },
+  { id: 'd1', name: 'Bachelor of Computer Applications', code: 'BCA', hodId: 's3', email: 'hod.bca@college.edu', contact: '9876543210', facultyCount: 8, studentCount: 13, labCount: 2, classroomCount: 3 },
+  { id: 'd2', name: 'Bachelor of Commerce', code: 'B.Com.', hodId: 's7', email: 'hod.bcom@college.edu', contact: '9876543220', facultyCount: 8, studentCount: 6, labCount: 1, classroomCount: 2 },
+  { id: 'd3', name: 'Bachelor of Science', code: 'B.Sc.', hodId: 's11', email: 'hod.bsc@college.edu', contact: '9876543230', facultyCount: 8, studentCount: 6, labCount: 2, classroomCount: 2 },
+  { id: 'd4', name: 'Bachelor of Arts', code: 'B.A.', hodId: 's15', email: 'hod.ba@college.edu', contact: '9876543240', facultyCount: 8, studentCount: 6, labCount: 1, classroomCount: 2 },
 ];
 
 const facultySeed: Array<[string, string, string, string, string[]]> = [
@@ -35,6 +35,22 @@ const facultySeed: Array<[string, string, string, string, string[]]> = [
   ['s16', 'Harish', 'Associate Professor', 'd4', ['Economics', 'Sociology', 'Indian Economy', 'Public Policy', 'Contemporary Society']],
   ['s17', 'Aishwarya', 'Assistant Professor', 'd4', ['Psychology', 'Indian Constitution', 'Social Psychology', 'Human Rights', 'Literature Seminar']],
   ['s18', 'Naveen', 'Lecturer / Instructor', 'd4', ['English Communication', 'Public Administration', 'Research Methodology', 'World History', 'Viva/Seminar']],
+  ['s19', 'Vivek', 'Assistant Professor', 'd1', ['Python Programming', 'Data Analytics', 'Artificial Intelligence Fundamentals', 'Programming Labs']],
+  ['s20', 'Arjun', 'Assistant Professor', 'd1', ['Data Structures', 'Database Management Systems', 'Advanced Java', 'DBMS Lab']],
+  ['s21', 'Ananya', 'Teaching Assistant / Research Scholar', 'd1', ['Web Development', 'Computer Networks', 'Software Engineering', 'Web Technologies']],
+  ['s22', 'Ritesh', 'Lecturer / Instructor', 'd1', ['Computer Fundamentals', 'Digital Fundamentals', 'Cyber Security', 'Seminar']],
+  ['s23', 'Nikhil', 'Assistant Professor', 'd2', ['Financial Accounting', 'Advanced Accounting', 'Auditing', 'Taxation']],
+  ['s24', 'Pooja', 'Lecturer / Instructor', 'd2', ['Business Economics', 'Business Environment', 'Entrepreneurship', 'Business Research']],
+  ['s25', 'Sanjay', 'Teaching Assistant / Research Scholar', 'd2', ['Business Statistics', 'Business Analytics', 'Investment Management', 'Banking Theory']],
+  ['s26', 'Ishita', 'Assistant Professor', 'd2', ['Business Law', 'Marketing Management', 'Human Resource Management', 'E-Commerce']],
+  ['s27', 'Meera', 'Assistant Professor', 'd3', ['Mathematics', 'Differential Equations', 'Numerical Methods', 'Advanced Statistics']],
+  ['s28', 'Vikram', 'Lecturer / Instructor', 'd3', ['Physics', 'Mechanics', 'Quantum Physics', 'Applied Physics']],
+  ['s29', 'Rhea', 'Teaching Assistant / Research Scholar', 'd3', ['Chemistry', 'Organic Chemistry', 'Physical Chemistry', 'Analytical Chemistry']],
+  ['s30', 'Joseph', 'Assistant Professor', 'd3', ['Computer Science', 'Programming', 'Computer Applications', 'Data Analysis']],
+  ['s31', 'Meenakshi', 'Assistant Professor', 'd4', ['English Literature', 'Modern Literature', 'Literature Seminar', 'English Communication']],
+  ['s32', 'Prakash', 'Lecturer / Instructor', 'd4', ['History', 'Indian History', 'World History', 'Public Administration']],
+  ['s33', 'Sonia', 'Teaching Assistant / Research Scholar', 'd4', ['Political Science', 'Political Theory', 'Indian Constitution', 'Human Rights']],
+  ['s34', 'Farhan', 'Assistant Professor', 'd4', ['Economics', 'Indian Economy', 'Development Economics', 'Sociology']],
 ];
 
 const staff: Staff[] = [
@@ -111,19 +127,20 @@ const subjectCatalog: Record<string, Record<number, string[]>> = {
 };
 
 const departmentFaculty: Record<string, string[]> = {
-  d1: ['s3', 's4', 's5', 's6'],
-  d2: ['s7', 's8', 's9', 's10'],
-  d3: ['s11', 's12', 's13', 's14'],
-  d4: ['s15', 's16', 's17', 's18'],
+  d1: ['s3', 's4', 's5', 's6', 's19', 's20', 's21', 's22'],
+  d2: ['s7', 's8', 's9', 's10', 's23', 's24', 's25', 's26'],
+  d3: ['s11', 's12', 's13', 's14', 's27', 's28', 's29', 's30'],
+  d4: ['s15', 's16', 's17', 's18', 's31', 's32', 's33', 's34'],
 };
 
-const roomList = ['Room 101', 'Room 102', 'Room 103', 'Room 104', 'Room 105', 'Room 106', 'Room 107', 'Room 108'];
-const labList = ['Computer Lab 1', 'Computer Lab 2', 'Physics Lab', 'Chemistry Lab', 'Statistics Lab'];
+const roomList = ['Room 101', 'Room 102', 'Room 103', 'Room 104', 'Room 105', 'Room 106', 'Room 107', 'Room 108', 'Room 109', 'Room 110', 'Room 111', 'Room 112', 'Room 113', 'Room 114', 'Room 115', 'Room 116', 'Room 117', 'Room 118', 'Room 119', 'Room 120'];
+const labList = ['Computer Lab 1', 'Computer Lab 2', 'Physics Lab', 'Chemistry Lab', 'Statistics Lab', 'Computer Lab 3', 'Commerce Lab 1', 'Commerce Lab 2', 'Science Computer Lab 1', 'Science Computer Lab 2'];
 
+const roomDepartmentIds = ['d1', 'd1', 'd1', 'd1', 'd1', 'd2', 'd2', 'd2', 'd2', 'd2', 'd3', 'd3', 'd3', 'd3', 'd3', 'd4', 'd4', 'd4', 'd4', 'd4'];
 const rooms = roomList.map((name, index) => ({
   id: `room-${index + 1}`,
   name,
-  departmentId: index < 3 ? 'd1' : index < 6 ? 'd2' : index < 8 ? 'd3' : 'd4',
+  departmentId: roomDepartmentIds[index],
   capacity: 60,
 }));
 
@@ -142,8 +159,8 @@ const resources: Resource[] = [
     id: `lab-res-${index + 1}`,
     name: lab,
     category: 'computer' as const,
-    departmentId: index < 2 ? 'd1' : index === 2 ? 'd3' : index === 3 ? 'd3' : 'd3',
-    location: index < 2 ? 'Computer Block' : 'Science Block',
+    departmentId: index < 2 || index === 5 ? 'd1' : index > 7 ? 'd3' : index > 5 ? 'd2' : 'd3',
+    location: index < 2 || index === 5 ? 'Computer Block' : index > 7 ? 'Science Block' : index > 5 ? 'Commerce Block' : 'Science Block',
     status: 'available' as const,
     isLab: true,
     capacity: 40,
@@ -156,6 +173,11 @@ const labs: Lab[] = [
   { id: 'lab-3', name: 'Physics Lab', departmentId: 'd3', capacity: 35, inChargeId: 's12', subjects: ['Physics', 'Mechanics', 'Electricity and Magnetism', 'Applied Physics'], systems: 18, equipment: [{ name: 'Oscilloscope', qty: 4, status: 'available' }], maintenanceStatus: 'good' },
   { id: 'lab-4', name: 'Chemistry Lab', departmentId: 'd3', capacity: 35, inChargeId: 's13', subjects: ['Chemistry', 'Organic Chemistry', 'Physical Chemistry', 'Advanced Chemistry'], systems: 16, equipment: [{ name: 'Fume Hood', qty: 3, status: 'available' }], maintenanceStatus: 'good' },
   { id: 'lab-5', name: 'Statistics Lab', departmentId: 'd3', capacity: 30, inChargeId: 's14', subjects: ['Statistics', 'Data Analysis', 'Advanced Statistics'], systems: 12, equipment: [{ name: 'Workstation', qty: 12, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-6', name: 'Computer Lab 3', departmentId: 'd1', capacity: 40, inChargeId: 's21', subjects: ['Data Structures', 'Database Management Systems', 'Python Application Development', 'Mobile Application Development'], systems: 30, equipment: [{ name: 'Projector', qty: 1, status: 'available' }, { name: 'Desktop', qty: 30, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-7', name: 'Commerce Lab 1', departmentId: 'd2', capacity: 40, inChargeId: 's25', subjects: ['Business Statistics', 'E-Commerce', 'Business Analytics', 'GST'], systems: 25, equipment: [{ name: 'Projector', qty: 1, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-8', name: 'Commerce Lab 2', departmentId: 'd2', capacity: 40, inChargeId: 's26', subjects: ['Business Statistics', 'E-Commerce', 'Business Analytics', 'GST'], systems: 25, equipment: [{ name: 'Projector', qty: 1, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-9', name: 'Science Computer Lab 1', departmentId: 'd3', capacity: 40, inChargeId: 's30', subjects: ['Programming', 'Computer Science', 'Computer Applications', 'Data Analysis'], systems: 25, equipment: [{ name: 'Projector', qty: 1, status: 'available' }], maintenanceStatus: 'good' },
+  { id: 'lab-10', name: 'Science Computer Lab 2', departmentId: 'd3', capacity: 40, inChargeId: 's30', subjects: ['Programming', 'Computer Science', 'Computer Applications', 'Data Analysis'], systems: 25, equipment: [{ name: 'Projector', qty: 1, status: 'available' }], maintenanceStatus: 'good' },
 ];
 
 const students: Student[] = Object.entries(studentNames).flatMap(([departmentId, names]) =>
@@ -225,11 +247,28 @@ const roomResourceMap: Record<string, string> = {
   'Room 106': 'res-room-106',
   'Room 107': 'res-room-107',
   'Room 108': 'res-room-108',
+  'Room 109': 'res-room-109',
+  'Room 110': 'res-room-110',
+  'Room 111': 'res-room-111',
+  'Room 112': 'res-room-112',
+  'Room 113': 'res-room-113',
+  'Room 114': 'res-room-114',
+  'Room 115': 'res-room-115',
+  'Room 116': 'res-room-116',
+  'Room 117': 'res-room-117',
+  'Room 118': 'res-room-118',
+  'Room 119': 'res-room-119',
+  'Room 120': 'res-room-120',
   'Computer Lab 1': 'lab-res-1',
   'Computer Lab 2': 'lab-res-2',
   'Physics Lab': 'lab-res-3',
   'Chemistry Lab': 'lab-res-4',
   'Statistics Lab': 'lab-res-5',
+  'Computer Lab 3': 'lab-res-6',
+  'Commerce Lab 1': 'lab-res-7',
+  'Commerce Lab 2': 'lab-res-8',
+  'Science Computer Lab 1': 'lab-res-9',
+  'Science Computer Lab 2': 'lab-res-10',
 };
 
 for (const department of departments) {
@@ -241,7 +280,7 @@ for (const department of departments) {
     deptSubjects.forEach((subjectName, index) => {
       const code = `${department.code.replace(/[^A-Z]/g, '')}${semester}${String(index + 1).padStart(2, '0')}`;
       const facultyId = facultyIds[(semester + index) % facultyIds.length] ?? department.hodId;
-      const isPractical = ['Programming in C', 'Python Programming', 'Data Structures', 'Database Management Systems', 'Java Programming', 'Web Development', 'Python Application Development', 'Major Project', 'Mobile Application Development', 'Business Statistics', 'E-Commerce', 'Business Analytics', 'Project Work', 'GST', 'Management Accounting', 'Programming', 'Data Analysis', 'Computer Applications', 'Electronics', 'Project Work', 'Applied Physics', 'Advanced Chemistry', 'Statistics', 'English Communication', 'Research Methodology', 'Dissertation', 'Literature Seminar'].includes(subjectName);
+      const isPractical = ['Programming in C', 'Python Programming', 'Data Structures', 'Database Management Systems', 'Java Programming', 'Web Development', 'Python Application Development', 'Major Project', 'Mobile Application Development', 'Business Statistics', 'E-Commerce', 'Business Analytics', 'GST', 'Management Accounting', 'Programming', 'Data Analysis', 'Computer Applications', 'Electronics', 'Applied Physics', 'Advanced Chemistry', 'Statistics', 'English Communication', 'Research Methodology', 'Literature Seminar'].includes(subjectName);
       const subject: Subject = {
         id: `${department.id}-sub-${semester}-${index + 1}`,
         name: subjectName,
@@ -252,10 +291,10 @@ for (const department of departments) {
         syllabusCompletion: 68 + ((semester + index) % 25),
         unitsTotal: 5,
         unitsCompleted: 3 + (index % 3),
-        classes: ['A'],
+        classes: [...new Set(students.filter((student) => student.departmentId === department.id && student.semester === semester).map((student) => student.section))],
         type: isPractical ? 'laboratory' : 'theory',
         credits: isPractical ? 2 : 4,
-        weeklyHrs: isPractical ? 2 : 4,
+        weeklyHrs: isPractical ? 4 : 4,
         suggestedResources: isPractical ? ['computer'] : ['classroom'],
       };
 
@@ -274,18 +313,19 @@ for (const department of departments) {
               : 'Statistics Lab'
         : roomList[(semester + index) % roomList.length];
 
+      const classIds = [...new Set(students.filter((student) => student.departmentId === department.id && student.semester === semester).map((student) => student.section))];
       subjectAllocations.push({
         id: `alloc-${department.id}-${semester}-${index + 1}`,
         subjectId: subject.id,
         departmentId: department.id,
         semester,
         academicYear: ACADEMIC_YEAR,
-        classIds: ['A'],
+        classIds: classIds.length ? classIds : ['A'],
         facultyId,
         resourceIds: [roomResourceMap[resourceName]],
         requiredTypes: isPractical ? ['computer'] : ['classroom'],
         status: 'allocated',
-        weeklyHours: isPractical ? 2 : 4,
+        weeklyHours: isPractical ? 4 : 4,
         createdBy: department.hodId,
         createdAt: '2026-08-01',
         updatedAt: '2026-08-01',
@@ -294,113 +334,123 @@ for (const department of departments) {
   }
 }
 
-const facultyUsage = new Map<string, string>();
-const roomUsage = new Map<string, string>();
-
-function resolveFaculty(deptId: string, slotKey: string, fallbackId: string): string {
-  const current = facultyUsage.get(slotKey);
-  if (!current) {
-    facultyUsage.set(slotKey, fallbackId);
-    return fallbackId;
-  }
-  const facultyPool = departmentFaculty[deptId] ?? [fallbackId];
-  for (const candidate of facultyPool) {
-    if (candidate !== current) {
-      facultyUsage.set(slotKey, candidate);
-      return candidate;
-    }
-  }
-  return fallbackId;
-}
-
-function resolveRoom(slotKey: string, isLab: boolean, preferred: string): string {
-  const current = roomUsage.get(slotKey);
-  if (!current) {
-    roomUsage.set(slotKey, preferred);
-    return preferred;
-  }
-  const pool = isLab ? labList : roomList;
-  const next = pool.find((name) => name !== current && name !== preferred) ?? preferred;
-  roomUsage.set(slotKey, next);
-  return next;
-}
-
 const timetable: TimetableEntry[] = [];
+const usedFacultySlots = new Set<string>();
+const usedSectionSlots = new Set<string>();
+const usedRoomSlots = new Set<string>();
+const practicalSubjects = new Set(['Programming in C', 'Python Programming', 'Data Structures', 'Database Management Systems', 'Java Programming', 'Web Development', 'Python Application Development', 'Major Project', 'Mobile Application Development', 'Business Statistics', 'E-Commerce', 'Business Analytics', 'GST', 'Management Accounting', 'Programming', 'Data Analysis', 'Computer Applications', 'Electronics', 'Applied Physics', 'Advanced Chemistry', 'Statistics', 'English Communication', 'Research Methodology', 'Literature Seminar']);
+const weeklySlots = DAYS.flatMap((day) => {
+  const slots = day === 'Saturday'
+    ? [{ number: 1, start: '09:00', end: '10:00' }, { number: 2, start: '10:00', end: '11:00' }, { number: 3, start: '11:00', end: '12:00' }, { number: 4, start: '12:00', end: '13:00' }]
+    : SLOT_DETAILS;
+  return slots.map((slot) => ({ day, start: slot.start, end: slot.end, time: `${slot.start}-${slot.end}` }));
+});
 
-const departmentTemplate: Record<string, Array<[string | number, string | number]>> = {
-  d1: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
-  d2: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
-  d3: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
-  d4: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]],
-};
+function roomCandidates(departmentId: string, subjectName: string) {
+  if (departmentId === 'd1' && practicalSubjects.has(subjectName)) return ['Computer Lab 1', 'Computer Lab 2', 'Computer Lab 3'];
+  if (departmentId === 'd2' && practicalSubjects.has(subjectName)) return ['Commerce Lab 1', 'Commerce Lab 2'];
+  if (departmentId === 'd3' && subjectName.includes('Physics')) return ['Physics Lab'];
+  if (departmentId === 'd3' && subjectName.includes('Chem')) return ['Chemistry Lab'];
+  if (departmentId === 'd3' && ['Programming', 'Computer Science', 'Computer Applications', 'Data Analysis'].includes(subjectName)) return ['Science Computer Lab 1', 'Science Computer Lab 2'];
+  if (departmentId === 'd3' && practicalSubjects.has(subjectName)) return ['Statistics Lab'];
+  return rooms.filter((room) => room.departmentId === departmentId).map((room) => room.name);
+}
 
+let scheduleCursor = 0;
 for (const department of departments) {
-  const facultyIds = departmentFaculty[department.id] ?? [department.hodId];
-
   for (let semester = 1; semester <= 6; semester += 1) {
-    const classSubjects = subjectCatalog[department.id][semester] ?? [];
-    const subjectNames = classSubjects;
-    const practicalIndex = 0;
+    const allocations = subjectAllocations.filter((item) => item.departmentId === department.id && item.semester === semester && item.status === 'allocated');
+    allocations.forEach((allocation, allocationIndex) => {
+      const subject = subjects.find((item) => item.id === allocation.subjectId);
+      if (!subject || !allocation.facultyId) return;
+      const isLab = subject.type === 'laboratory';
+      const periodsRequired = allocation.weeklyHours || subject.weeklyHrs || (isLab ? 4 : 4);
 
-    DAYS.forEach((day, dayIndex) => {
-      const periodSubjects = [...subjectNames];
-      if (day === 'Wednesday') {
-        periodSubjects[2] = subjectNames[practicalIndex];
-        periodSubjects[3] = subjectNames[practicalIndex];
-      }
-      if (day === 'Thursday') {
-        periodSubjects[4] = subjectNames[1];
-        periodSubjects[5] = 'Mentoring';
-      }
-      if (day === 'Friday') {
-        periodSubjects[5] = 'Library';
-      }
-      if (day === 'Monday') {
-        periodSubjects[5] = 'Seminar';
-      }
-      if (day === 'Tuesday') {
-        periodSubjects[5] = 'Project';
-      }
+      for (const section of allocation.classIds) {
+        let remaining = periodsRequired;
+        let occurrence = 0;
+        while (remaining > 0) {
+          const blockSize = isLab && remaining >= 2 ? 2 : 1;
+          let placed = false;
+          const preferredDay = isLab
+            ? (allocationIndex + occurrence * 2) % 5
+            : (allocationIndex + occurrence * 2) % 5;
+          for (let attempt = 0; attempt < weeklySlots.length && !placed; attempt += 1) {
+            const preferredStart = weeklySlots.findIndex((slot) => DAYS.indexOf(slot.day) === preferredDay);
+            const firstIndex = attempt < SLOT_DETAILS.length
+              ? (preferredStart + attempt) % weeklySlots.length
+              : (scheduleCursor + attempt - SLOT_DETAILS.length) % weeklySlots.length;
+            const first = weeklySlots[firstIndex];
+            const second = weeklySlots[firstIndex + 1];
+            if (blockSize === 2 && (!second || second.day !== first.day || second.start !== first.end)) continue;
 
-      const daySlots = day === 'Saturday' ? SLOT_DETAILS.slice(0, 3) : SLOT_DETAILS;
+            const block = blockSize === 2 ? [first, second] : [first];
+            const facultyFree = block.every((slot) => !usedFacultySlots.has(`${slot.day}|${slot.time}|${allocation.facultyId}`));
+            const sectionFree = block.every((slot) => !usedSectionSlots.has(`${slot.day}|${slot.time}|${department.id}|${semester}|${section}`));
+            const room = roomCandidates(department.id, subject.name).find((candidate) => block.every((slot) => !usedRoomSlots.has(`${slot.day}|${slot.time}|${candidate}`)));
+            if (!facultyFree || !sectionFree || !room) continue;
 
-      daySlots.forEach((slot, slotIndex) => {
-        const rawSubjectName = periodSubjects[slotIndex] ?? subjectNames[(slotIndex + dayIndex) % subjectNames.length];
-        const isLab = ['Programming in C', 'Python Programming', 'Data Structures', 'Database Management Systems', 'Java Programming', 'Web Development', 'Python Application Development', 'Major Project', 'Mobile Application Development', 'Business Statistics', 'E-Commerce', 'Business Analytics', 'Project Work', 'GST', 'Management Accounting', 'Programming', 'Data Analysis', 'Computer Applications', 'Electronics', 'Applied Physics', 'Advanced Chemistry', 'Statistics', 'English Communication', 'Research Methodology', 'Dissertation', 'Literature Seminar'].includes(String(rawSubjectName));
-        const subjectName = typeof rawSubjectName === 'string' ? rawSubjectName : subjectNames[0];
-        const matchedSubject = subjects.find((subject) => subject.departmentId === department.id && subject.semester === semester && subject.name === subjectName) ?? subjects.find((subject) => subject.departmentId === department.id && subject.semester === semester)!
-        const resolvedFaculty = resolveFaculty(department.id, `${day}|${slot.start}`, matchedSubject.facultyId || facultyIds[0]);
-        const preferredRoom = isLab
-          ? department.id === 'd1'
-            ? slotIndex % 2 === 0
-              ? 'Computer Lab 1'
-              : 'Computer Lab 2'
-            : department.id === 'd3' && subjectName.includes('Physics')
-              ? 'Physics Lab'
-              : department.id === 'd3' && subjectName.includes('Chem')
-                ? 'Chemistry Lab'
-                : 'Statistics Lab'
-          : roomList[(dayIndex + slotIndex + semester) % roomList.length];
-        const finalRoom = resolveRoom(`${day}|${slot.start}`, isLab, preferredRoom);
-
-        timetable.push({
-          id: `tt-${department.id}-s${semester}-${day}-${slot.number}`,
-          departmentId: department.id,
-          section: 'A',
-          semester,
-          day,
-          slot: `${slot.start}-${slot.end}`,
-          subject: subjectName,
-          facultyId: resolvedFaculty,
-          room: finalRoom,
-          isLab,
-          published: true,
-          status: 'approved',
-        });
-      });
+            block.forEach((slot) => {
+              usedFacultySlots.add(`${slot.day}|${slot.time}|${allocation.facultyId}`);
+              usedSectionSlots.add(`${slot.day}|${slot.time}|${department.id}|${semester}|${section}`);
+              usedRoomSlots.add(`${slot.day}|${slot.time}|${room}`);
+              timetable.push({
+                id: `tt-${department.id}-s${semester}-${section}-${subject.id}-${occurrence}-${slot.time}`,
+                departmentId: department.id,
+                section,
+                semester,
+                day: slot.day,
+                slot: slot.time,
+                subject: subject.name,
+                facultyId: allocation.facultyId!,
+                room,
+                isLab,
+                published: true,
+                status: 'approved',
+              });
+            });
+            scheduleCursor = (firstIndex + blockSize) % weeklySlots.length;
+            occurrence += 1;
+            remaining -= blockSize;
+            placed = true;
+          }
+          if (!placed) break;
+        }
+      }
     });
   }
 }
+
+const timetableValidationKeys = new Set<string>();
+for (const entry of timetable) {
+  const keys = [
+    `faculty|${entry.day}|${entry.slot}|${entry.facultyId}`,
+    `section|${entry.day}|${entry.slot}|${entry.departmentId}|${entry.semester}|${entry.section}`,
+    `room|${entry.day}|${entry.slot}|${entry.room}`,
+  ];
+  if (entry.day === 'Sunday' || (entry.day === 'Saturday' && entry.slot > '12:00-13:00') || (entry.day !== 'Saturday' && !['09:00-10:00', '10:00-11:00', '11:00-12:00', '13:00-14:00', '14:00-15:00', '15:00-16:00'].includes(entry.slot))) {
+    throw new Error(`Generated timetable entry is outside working hours: ${entry.id}`);
+  }
+  if (keys.some((key) => timetableValidationKeys.has(key))) throw new Error(`Generated timetable conflict: ${entry.id}`);
+  keys.forEach((key) => timetableValidationKeys.add(key));
+}
+
+subjectAllocations.forEach((allocation) => {
+  allocation.classIds.forEach((section) => {
+    const subject = subjects.find((item) => item.id === allocation.subjectId);
+    const occurrences = timetable.filter((entry) => entry.departmentId === allocation.departmentId && entry.semester === allocation.semester && entry.section === section && entry.subject === subject?.name);
+    if (occurrences.length !== allocation.weeklyHours || new Set(occurrences.map((entry) => entry.day)).size < 2) {
+      console.warn(`Weekly schedule could not fully satisfy ${subject?.name ?? allocation.subjectId} ${allocation.semester}${section}.`);
+    }
+  });
+});
+
+staff.forEach((member) => {
+  const allocations = subjectAllocations.filter((allocation) => allocation.facultyId === member.id && allocation.status === 'allocated');
+  member.subjects = [...new Set(allocations.map((allocation) => subjects.find((subject) => subject.id === allocation.subjectId)?.name).filter((name): name is string => Boolean(name)))];
+  member.classes = [...new Set(allocations.flatMap((allocation) => allocation.classIds.map((section) => `${allocation.semester}${section}`)))];
+  member.weeklyHours = allocations.reduce((total, allocation) => total + allocation.weeklyHours, 0);
+});
 
 const exams: ExamSchedule[] = subjects.map((subject, index) => ({
   id: `ex${index + 1}`,

@@ -4,21 +4,17 @@ import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
 import { Placeholder, LeaveManagementView } from '../../components/SharedViews';
 import { CurriculumOversight } from './CurriculumOversight';
-import { BarChart3, TrendingUp, Award, FileText, FlaskConical, Users, Users2, CheckSquare, XCircle, Send, AlertTriangle, Download, FileCheck, BookOpen, ArrowLeft, CalendarDays } from 'lucide-react';
+import { BarChart3, TrendingUp, Award, FileText, FlaskConical, Users, Users2, CheckSquare, XCircle, AlertTriangle, Download, FileCheck } from 'lucide-react';
 import { useState } from 'react';
 import type { ApprovalRequest, Candidate, Staff } from '../../data/types';
 import { ExaminationReviewWorkspace } from '../exam/ExamWorkflow';
+import { DeanHiringRequests } from '../hod/FacultyHiringRequest';
 
 export function DeanDashboard({ activeMenu }: { activeMenu: string }) {
 switch (activeMenu) {
     case 'd-curriculum': return <CurriculumOversight />;
     case 'd-apply-leave': return <LeaveManagementView />;
     case 'd-exam-approvals': return <ExaminationReviewWorkspace reviewer="dean" />;
-    case 'd-syllabus': return <SyllabusProgressFilter />;
-    case 'd-faculty-progress': return <FacultyProgressFilter />;
-    case 'd-delay': return <DelayComparison />;
-    case 'd-calendar': return <CalendarCompliance />;
-    case 'd-remarks': return <RemarksReports />;
     case 'd-faculty-recruitment': return <FacultyRecruitment />;
     case 'd-recruit': return <RecruitmentRequests />;
     case 'd-shortlist': return <ShortlistedCandidates />;
@@ -92,332 +88,8 @@ function DeanHome() {
   );
 }
 
-function SyllabusProgressFilter() {
-  const { data } = useStore();
-  const [dept, setDept] = useState('all');
-  const [sem, setSem] = useState('all');
-  const [showSubjectTracking, setShowSubjectTracking] = useState(false);
-  const semesters = [...new Set(data.subjects.filter((s) => dept === 'all' || s.departmentId === dept).map((s) => s.semester))].sort((a, b) => a - b);
-  let rows = data.subjects.filter((s) => (dept === 'all' || s.departmentId === dept) && (sem === 'all' || s.semester === Number(sem)));
-  const avg = rows.length ? Math.round(rows.reduce((a, s) => a + s.syllabusCompletion, 0) / rows.length) : 0;
-
-  if (showSubjectTracking) return <SubjectTrackingFilter onBack={() => setShowSubjectTracking(false)} />;
-
-  return (
-    <div>
-      <PageHeader title="Syllabus Progress" description="Select class/section/year to view syllabus completion" action={
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setShowSubjectTracking(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            title="Subject-wise tracking"
-            aria-label="Open subject-wise tracking"
-          >
-            <BookOpen className="h-4 w-4" />
-          </button>
-          <DeptSelector value={dept} onChange={(v) => { setDept(v); setSem('all'); }} />
-          <select className="input w-auto" value={sem} onChange={(e) => setSem(e.target.value)}>
-            <option value="all">Semester: All</option>
-            {semesters.map((s) => <option key={s} value={s}>Sem {s}</option>)}
-          </select>
-        </div>
-      } />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Subjects" value={rows.length} icon={<FileText className="w-5 h-5" />} accent="blue" />
-        <StatCard label="Avg Completion" value={`${avg}%`} icon={<TrendingUp className="w-5 h-5" />} accent={avg < 75 ? 'amber' : 'emerald'} />
-        <StatCard label="Behind Schedule" value={rows.filter((r) => r.syllabusCompletion < 75).length} icon={<AlertTriangle className="w-5 h-5" />} accent="rose" />
-        <StatCard label="On Track" value={rows.filter((r) => r.syllabusCompletion >= 75).length} icon={<CheckSquare className="w-5 h-5" />} accent="emerald" />
-      </div>
-      <DataTable
-        rows={rows}
-        columns={[
-          { key: 'name', header: 'Subject', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'code', header: 'Code' },
-          { key: 'departmentId', header: 'Dept', render: (s) => deptCode(data, s.departmentId) },
-          { key: 'semester', header: 'Sem' },
-          { key: 'facultyId', header: 'Faculty', render: (s) => staffName(data, s.facultyId) },
-          { key: 'syllabusCompletion', header: 'Completion', render: (s) => (
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${s.syllabusCompletion < 70 ? 'bg-rose-500' : s.syllabusCompletion < 85 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${s.syllabusCompletion}%` }} /></div>
-              <span className="text-xs font-medium text-slate-700">{s.syllabusCompletion}%</span>
-            </div>
-          ) },
-        ]}
-      />
-    </div>
-  );
-}
-
-function SubjectTrackingFilter({ onBack }: { onBack: () => void }) {
-  const { data } = useStore();
-  const [dept, setDept] = useState('all');
-  const [subjectId, setSubjectId] = useState('all');
-  const subjects = data.subjects.filter((s) => dept === 'all' || s.departmentId === dept);
-  const selected = data.subjects.find((s) => s.id === subjectId);
-  return (
-    <div>
-      <PageHeader title="Subject-wise Tracking" description="Select class and subject to view completion status" action={
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            title="Back to syllabus progress"
-            aria-label="Back to syllabus progress"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <DeptSelector value={dept} onChange={(v) => { setDept(v); setSubjectId('all'); }} />
-          <select className="input w-auto" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-            <option value="all">Subject: All</option>
-            {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-      } />
-      {selected ? (
-        <div className="space-y-4">
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div><h3 className="text-lg font-semibold text-slate-900">{selected.name}</h3><p className="text-sm text-slate-500">{selected.code} · Sem {selected.semester} · {deptCode(data, selected.departmentId)}</p></div>
-              <div className="text-right"><p className="text-3xl font-bold text-slate-900">{selected.syllabusCompletion}%</p><p className="text-xs text-slate-500">Completion</p></div>
-            </div>
-            <div className="h-3 bg-slate-100 rounded-full overflow-hidden mb-4"><div className={`h-full rounded-full ${selected.syllabusCompletion < 70 ? 'bg-rose-500' : selected.syllabusCompletion < 85 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${selected.syllabusCompletion}%` }} /></div>
-            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div><dt className="text-xs text-slate-500">Faculty</dt><dd className="text-sm text-slate-900 mt-0.5">{staffName(data, selected.facultyId)}</dd></div>
-              <div><dt className="text-xs text-slate-500">Units</dt><dd className="text-sm text-slate-900 mt-0.5">{selected.unitsCompleted}/{selected.unitsTotal}</dd></div>
-              <div><dt className="text-xs text-slate-500">Classes</dt><dd className="text-sm text-slate-900 mt-0.5">{selected.classes.join(', ')}</dd></div>
-              <div><dt className="text-xs text-slate-500">Remaining</dt><dd className="text-sm text-slate-900 mt-0.5">{selected.unitsTotal - selected.unitsCompleted} units</dd></div>
-            </dl>
-          </div>
-        </div>
-      ) : (
-        <DataTable
-          rows={subjects}
-          columns={[
-            { key: 'name', header: 'Subject', render: (s) => <span className="font-medium">{s.name}</span> },
-            { key: 'code', header: 'Code' },
-            { key: 'departmentId', header: 'Dept', render: (s) => deptCode(data, s.departmentId) },
-            { key: 'facultyId', header: 'Faculty', render: (s) => staffName(data, s.facultyId) },
-            { key: 'unitsCompleted', header: 'Units', render: (s) => `${s.unitsCompleted}/${s.unitsTotal}` },
-            { key: 'syllabusCompletion', header: 'Completion', render: (s) => <span className={s.syllabusCompletion < 75 ? 'text-rose-600 font-semibold' : ''}>{s.syllabusCompletion}%</span> },
-          ]}
-        />
-      )}
-    </div>
-  );
-}
-
-function FacultyProgressFilter() {
-  const { data } = useStore();
-  const [dept, setDept] = useState('all');
-  const [showDelayComparison, setShowDelayComparison] = useState(false);
-  const teaching = data.staff.filter((s) => ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'].includes(s.role) && (dept === 'all' || s.departmentId === dept));
-
-  if (showDelayComparison) {
-    return <DelayComparison onBack={() => setShowDelayComparison(false)} />;
-  }
-
-  return (
-    <div>
-      <PageHeader title="Faculty Teaching Progress" description="Select department to view faculty and their completion percentage" action={
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setShowDelayComparison(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            title="Delay & comparison"
-            aria-label="Open delay and comparison"
-          >
-            <AlertTriangle className="h-4 w-4" />
-          </button>
-          <DeptSelector value={dept} onChange={setDept} />
-        </div>
-      } />
-      <DataTable
-        rows={teaching.map((f) => {
-          const subs = data.subjects.filter((s) => s.facultyId === f.id);
-          const avg = subs.length ? Math.round(subs.reduce((a, s) => a + s.syllabusCompletion, 0) / subs.length) : 0;
-          return { id: f.id, name: f.name, dept: deptCode(data, f.departmentId), designation: f.designation, subjects: subs.length, avg, pending: subs.filter((s) => s.syllabusCompletion < 75).length };
-        })}
-        columns={[
-          { key: 'name', header: 'Faculty', render: (f) => <span className="font-medium">{f.name}</span> },
-          { key: 'designation', header: 'Designation' },
-          { key: 'dept', header: 'Dept' },
-          { key: 'subjects', header: 'Subjects' },
-          { key: 'avg', header: 'Avg Completion', render: (f) => (
-            <div className="flex items-center gap-2">
-              <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${f.avg < 70 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${f.avg}%` }} /></div>
-              <span className={f.avg < 75 ? 'text-rose-600 font-semibold' : ''}>{f.avg}%</span>
-            </div>
-          ) },
-          { key: 'pending', header: 'Behind Schedule', render: (f) => f.pending || '—' },
-        ]}
-      />
-    </div>
-  );
-}
-
-function DelayComparison({ onBack }: { onBack?: () => void }) {
-  const { data } = useStore();
-  const [showCalendarCompliance, setShowCalendarCompliance] = useState(false);
-  const delayed = data.subjects.filter((s) => s.syllabusCompletion < 75);
-
-  if (showCalendarCompliance) {
-    return <CalendarCompliance onBack={() => setShowCalendarCompliance(false)} />;
-  }
-
-  return (
-    <div>
-      <PageHeader title="Delay & Department Comparison" description="Subjects and departments behind schedule" action={
-        <div className="flex gap-2">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-              title="Back to Faculty Teaching Progress"
-              aria-label="Back to Faculty Teaching Progress"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowCalendarCompliance(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            title="Calendar compliance"
-            aria-label="Open calendar compliance"
-          >
-            <CalendarDays className="h-4 w-4" />
-          </button>
-        </div>
-      } />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {data.departments.map((d) => {
-          const subs = data.subjects.filter((s) => s.departmentId === d.id);
-          const delayedCount = subs.filter((s) => s.syllabusCompletion < 75).length;
-          return <StatCard key={d.id} label={d.code} value={`${delayedCount} delayed`} icon={<AlertTriangle className="w-5 h-5" />} accent={delayedCount > 0 ? 'rose' : 'emerald'} />;
-        })}
-      </div>
-      <DataTable
-        rows={delayed}
-        columns={[
-          { key: 'name', header: 'Subject', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'departmentId', header: 'Dept', render: (s) => deptCode(data, s.departmentId) },
-          { key: 'facultyId', header: 'Faculty', render: (s) => staffName(data, s.facultyId) },
-          { key: 'syllabusCompletion', header: 'Completion', render: (s) => <span className="text-rose-600 font-semibold">{s.syllabusCompletion}%</span> },
-        ]}
-      />
-    </div>
-  );
-}
-
-function CalendarCompliance({ onBack }: { onBack?: () => void }) {
-  const { data } = useStore();
-  return (
-    <div>
-      <PageHeader title="Academic Calendar Compliance" description="Syllabus progress against scheduled milestones" action={
-        onBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            title="Back to Delay & Comparison"
-            aria-label="Back to Delay & Comparison"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-        )
-      } />
-      <DataTable
-        rows={data.subjects.map((s) => ({ id: s.id, name: s.name, dept: deptCode(data, s.departmentId), planned: 80, actual: s.syllabusCompletion, deviation: s.syllabusCompletion - 80 }))}
-        columns={[
-          { key: 'name', header: 'Subject', render: (s) => <span className="font-medium">{s.name}</span> },
-          { key: 'dept', header: 'Dept' },
-          { key: 'planned', header: 'Planned', render: (s) => `${s.planned}%` },
-          { key: 'actual', header: 'Actual', render: (s) => `${s.actual}%` },
-          { key: 'deviation', header: 'Deviation', render: (s) => <span className={s.deviation < 0 ? 'text-rose-600 font-semibold' : 'text-emerald-600'}>{s.deviation > 0 ? '+' : ''}{s.deviation}%</span> },
-        ]}
-      />
-    </div>
-  );
-}
-
-function RemarksReports() {
-  const { data } = useStore();
-  const [dept, setDept] = useState(data.departments[0]?.id ?? '');
-  const [remark, setRemark] = useState('');
-  const [savedRemarks, setSavedRemarks] = useState<{ id: string; dept: string; text: string; date: string }[]>([
-    { id: 'rm1', dept: 'd1', text: 'BCA department syllabus progress is satisfactory. Focus on Data Structures completion.', date: '2026-07-15' },
-    { id: 'rm2', dept: 'd2', text: 'B.Com. needs attention on Corporate Accounting — behind schedule. Please arrange remedial classes.', date: '2026-07-12' },
-  ]);
-
-  const submit = () => {
-    if (!remark.trim()) return;
-    setSavedRemarks([{ id: `rm${Date.now()}`, dept, text: remark, date: new Date().toISOString().slice(0, 10) }, ...savedRemarks]);
-    setRemark('');
-  };
-
-  const exportReport = (type: 'pdf' | 'excel') => {
-    alert(`Exporting ${type.toUpperCase()} report for ${deptName(data, dept)}...`);
-  };
-
-  return (
-    <div>
-      <PageHeader title="Remarks & Progress Reports" description="Record observations for HODs and generate reports" action={
-        <div className="flex gap-2">
-          <button className="btn-secondary" onClick={() => exportReport('pdf')}><FileText className="w-4 h-4" /> PDF</button>
-          <button className="btn-secondary" onClick={() => exportReport('excel')}><Download className="w-4 h-4" /> Excel</button>
-        </div>
-      } />
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Issue Remark to HOD</h3>
-          <div className="space-y-3">
-            <DeptSelector value={dept} onChange={setDept} label="To HOD of" />
-            <textarea className="input" rows={4} placeholder="Enter observation or instruction for the HOD..." value={remark} onChange={(e) => setRemark(e.target.value)} />
-            <button className="btn-primary w-full" onClick={submit}><Send className="w-4 h-4" /> Send Remark</button>
-          </div>
-        </div>
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Issued Remarks</h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {savedRemarks.map((r) => (
-              <div key={r.id} className="p-3 rounded-lg bg-slate-50">
-                <div className="flex justify-between mb-1"><span className="text-xs font-semibold text-slate-700">{deptName(data, r.dept)}</span><span className="text-xs text-slate-400">{r.date}</span></div>
-                <p className="text-sm text-slate-700">{r.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="card p-5 mt-6">
-        <h3 className="text-sm font-semibold text-slate-900 mb-3">Department-wise Report Summary</h3>
-        <DataTable
-          rows={data.departments.map((d) => {
-            const subs = data.subjects.filter((s) => s.departmentId === d.id);
-            const avg = subs.length ? Math.round(subs.reduce((a, s) => a + s.syllabusCompletion, 0) / subs.length) : 0;
-            const studs = data.students.filter((s) => s.departmentId === d.id);
-            const passPct = studs.length ? Math.round((studs.filter((s) => s.backlogs === 0).length / studs.length) * 100) : 0;
-            return { id: d.id, name: d.name, syllabus: avg, pass: passPct, faculty: d.facultyCount, students: d.studentCount };
-          })}
-          columns={[
-            { key: 'name', header: 'Department', render: (d) => <span className="font-medium">{d.name}</span> },
-            { key: 'syllabus', header: 'Syllabus Avg', render: (d) => `${d.syllabus}%` },
-            { key: 'pass', header: 'Pass Rate', render: (d) => `${d.pass}%` },
-            { key: 'faculty', header: 'Faculty' },
-            { key: 'students', header: 'Students' },
-          ]}
-        />
-      </div>
-    </div>
-  );
-}
-
 function FacultyRecruitment() {
   const [activeTab, setActiveTab] = useState<'shortlist' | 'promotion'>('shortlist');
-  const [showHrPanel, setShowHrPanel] = useState(false);
 
   const tabs = [
     { id: 'shortlist', label: 'Shortlisted Candidates', icon: Users },
@@ -429,11 +101,6 @@ function FacultyRecruitment() {
       <PageHeader
         title="Faculty Recruitment"
         description="Shortlisted candidates, promotion requests, and HR recruitment requests in one place"
-        action={
-          <button className="btn-primary" onClick={() => setShowHrPanel(true)}>
-            <Send className="w-4 h-4" /> Send HR Request
-          </button>
-        }
       />
       <div className="card inline-flex items-center gap-1 p-1 mb-6">
         {tabs.map((tab) => (
@@ -448,27 +115,7 @@ function FacultyRecruitment() {
         ))}
       </div>
       {activeTab === 'shortlist' ? <ShortlistedCandidates /> : <PromotionRequests />}
-      {showHrPanel && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowHrPanel(false)} />
-          <aside className="absolute right-0 top-0 h-full w-full max-w-4xl overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Faculty Recruitment</p>
-              <button
-                type="button"
-                onClick={() => setShowHrPanel(false)}
-                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"
-                aria-label="Close send HR request panel"
-              >
-                <XCircle className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-5">
-              <RecruitmentRequests />
-            </div>
-          </aside>
-        </div>
-      )}
+      <div className="mt-6"><DeanHiringRequests /></div>
     </div>
   );
 }
@@ -1205,10 +852,10 @@ function DeptReports() {
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div><p className="text-xs text-slate-500">Syllabus</p><p className="text-lg font-bold text-slate-900">{avg}%</p></div>
                 <div><p className="text-xs text-slate-500">Pass Rate</p><p className="text-lg font-bold text-slate-900">{passPct}%</p></div>
-                <div><p className="text-xs text-slate-500">Faculty</p><p className="text-lg font-bold text-slate-900">{d.facultyCount}</p></div>
+                <div><p className="text-xs text-slate-500">Faculty</p><p className="text-lg font-bold text-slate-900">{data.staff.filter((s) => s.departmentId === d.id && s.role !== 'principal' && s.role !== 'dean').length}</p></div>
                 <div><p className="text-xs text-slate-500">Publications</p><p className="text-lg font-bold text-slate-900">{pubs}</p></div>
                 <div><p className="text-xs text-slate-500">Requests</p><p className="text-lg font-bold text-slate-900">{reqs}</p></div>
-                <div><p className="text-xs text-slate-500">Students</p><p className="text-lg font-bold text-slate-900">{d.studentCount}</p></div>
+                <div><p className="text-xs text-slate-500">Students</p><p className="text-lg font-bold text-slate-900">{data.students.filter((s) => s.departmentId === d.id).length}</p></div>
               </div>
             </div>
           );

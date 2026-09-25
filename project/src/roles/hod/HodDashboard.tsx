@@ -4,19 +4,20 @@ import { StatCard } from '../../components/StatCard';
 import { DataTable, StatusBadge } from '../../components/DataTable';
 import { StudentsDirectory, StaffDirectory, GrievancesPanel, SyllabusProgressView, Placeholder, LeaveManagementView } from '../../components/SharedViews';
 import { ResourceManagement } from '../../components/ResourceViews';
-import { TimetableWorkspace } from './TimetableWorkspace';
-import { SubjectAllocationWorkspace } from './SubjectAllocationWorkspace';
+import { AcademicSetupWorkspace } from './AcademicSetupWorkspace';
 import { MentoringWorkspace } from './MentoringWorkspace';
 import { WorkloadWorkspace } from './WorkloadWorkspace';
 import { AssessmentMarksWorkspace, ExaminationManagementWorkspace } from '../exam/ExamWorkflow';
-import { Building2, Users, Beaker, Wrench, GraduationCap, ClipboardCheck, TrendingUp, FileText, Calendar, CalendarDays, BarChart3, Award, AlertTriangle, Clock, CheckSquare, Send, Plus, XCircle, ArrowLeft, RotateCcw, ListChecks, Search, UserRoundCheck, BookOpen, Briefcase, Mail, Phone, MapPin, Eye, ArrowRightLeft } from 'lucide-react';
+import { Building2, Users, Beaker, Wrench, GraduationCap, ClipboardCheck, TrendingUp, FileText, Calendar, CalendarDays, BarChart3, Award, AlertTriangle, Clock, CheckSquare, Send, Plus, XCircle, ArrowLeft, RotateCcw, ListChecks, Search, UserRoundCheck, BookOpen, Briefcase, Mail, Phone, MapPin, Eye, ArrowRightLeft, History } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Student, Staff, TimetableEntry, Candidate, ApprovalRequest, AssignedTask, MentorAllocation } from '../../data/types';
 import { StudentDetailModal } from '../../components/DetailModals';
+import { Modal } from '../../components/Modal';
 import { FacultyPerformanceModal } from './FacultyPerformanceModal';
 import { facultyTeachingEffectiveness, teTrend } from './teachingEffectiveness';
 import { addDays, computeFacultyDailyWorkload, dayName, formatDayLabel, formatFullDate, formatIso, isoDate, TASK_PRIORITY_STYLES, WORK_CATEGORY_LABELS } from './workloadLogic';
 import { ACTIVE_ACADEMIC_YEAR, MENTOR_CAPACITY, getAllocationForStudent, getMenteesOfMentor, getMentorPool, loadStateFor, mentoringClassLabel, todayISO, uid } from './mentoringLogic';
+import { HodHiringRequestPanel } from './FacultyHiringRequest';
 
 const TEACHING_ROLES = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
 const LUNCH_SLOTS = ['13:00-14:00'];
@@ -29,6 +30,59 @@ function ChartTooltip({ title, children, className = '' }: { title: string; chil
       <p className="text-xs font-semibold text-slate-900">{title}</p>
       {children}
     </div>
+  );
+}
+
+/* ======= Today's Timetable (compact dashboard preview) ======= */
+type TodayClassPeriod = { type: 'class'; slot: string; entries: TimetableEntry[]; start: string; end: string };
+type TodayBreakPeriod = { type: 'break'; start: string; end: string; label: string };
+type TodayPeriod = TodayClassPeriod | TodayBreakPeriod;
+
+/**
+ * Compact class rows for a single timetable slot. Mirrors the existing
+ * timetable row interaction (section · subject · faculty · room) using the
+ * same slate/blue typography as the rest of the dashboard.
+ */
+function TimetableClassList({ entries, staff, blue = false }: { entries: TimetableEntry[]; staff: Staff[]; blue?: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className={`text-[10px] uppercase tracking-[0.06em] ${blue ? 'text-blue-700' : 'text-slate-400'}`}>
+            <th className="px-2.5 py-1 text-left font-semibold">Section</th>
+            <th className="px-2.5 py-1 text-left font-semibold">Subject</th>
+            <th className="px-2.5 py-1 text-left font-semibold">Faculty</th>
+            <th className="hidden px-2.5 py-1 text-left font-semibold sm:table-cell">Room</th>
+          </tr>
+        </thead>
+        <tbody className={`divide-y ${blue ? 'divide-blue-100' : 'divide-slate-100'}`}>
+          {entries.map((entry) => (
+            <tr key={entry.id}>
+              <td className="whitespace-nowrap px-2.5 py-1 font-medium text-slate-900">{entry.section} · Sem {entry.semester}</td>
+              <td className="px-2.5 py-1 text-slate-700">{entry.subject}</td>
+              <td className="px-2.5 py-1 text-slate-700">{staff.find((member) => member.id === entry.facultyId)?.name ?? 'Faculty'}</td>
+              <td className="hidden whitespace-nowrap px-2.5 py-1 text-slate-700 sm:table-cell">{entry.room}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Small "View → / Hide" toggle used for upcoming timetable slots. */
+function ViewSlotButton({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+        expanded ? 'border-slate-200 bg-slate-100 text-slate-600' : 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:bg-blue-100'
+      }`}
+    >
+      {expanded ? 'Hide' : 'View'}
+      <span aria-hidden="true">{expanded ? '↑' : '→'}</span>
+    </button>
   );
 }
 
@@ -66,7 +120,6 @@ switch (activeMenu) {
 }
 
 const ACADEMIC_TABS = [
-  { id: 'timetable', label: 'Timetable Management', icon: Calendar },
   { id: 'examination', label: 'Examination Management', icon: CalendarDays },
   { id: 'results', label: 'Result Analysis', icon: BarChart3 },
 ] as const;
@@ -104,12 +157,12 @@ function ResourceManagementWorkspace({ deptId }: { deptId: string }) {
 }
 
 function AcademicManagement({ deptId }: { deptId: string }) {
-  const [tab, setTab] = useState<(typeof ACADEMIC_TABS)[number]['id']>('timetable');
+  const [tab, setTab] = useState<(typeof ACADEMIC_TABS)[number]['id']>('examination');
 
   return (
     <div>
-      <PageHeader title="Academic Management" description="Coordinate timetable, examinations and department results." />
-      <div className="border-b border-slate-200 mb-6 flex gap-1 overflow-x-auto" role="tablist" aria-label="Academic Management">
+      <PageHeader title="Examination" description="Coordinate examinations and department results." />
+      <div className="border-b border-slate-200 mb-6 flex gap-1 overflow-x-auto" role="tablist" aria-label="Examination">
         {ACADEMIC_TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -124,7 +177,6 @@ function AcademicManagement({ deptId }: { deptId: string }) {
           </button>
         ))}
       </div>
-      {tab === 'timetable' && <TimetableWorkspace deptId={deptId} />}
       {tab === 'examination' && (
         <>
           <ExaminationManagementWorkspace deptId={deptId} />
@@ -142,6 +194,9 @@ function HodHome({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: str
   const { data } = useStore();
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [now, setNow] = useState(new Date());
+  const [expandedSlot, setExpandedSlot] = useState<string | null>(null);
+  const [showFullTimetable, setShowFullTimetable] = useState(false);
+
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 30000);
@@ -227,6 +282,71 @@ function HodHome({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: str
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     return currentMinutes >= startMinutes && currentMinutes < endMinutes;
   };
+
+  /* ---- Today's Timetable: parse time, group slots and resolve live/next states ---- */
+  const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const formatSlot = (slot: string) => {
+    const [start, end] = slot.split('-');
+    return `${start} – ${end}`;
+  };
+  const formatRange = (start: string, end: string) => `${start} – ${end}`;
+
+  // Group today's entries per time slot (chronological, classes only)
+  const todaySlotGroups = todayTimetable
+    .reduce<TodayClassPeriod[]>((groups, entry) => {
+      const existing = groups.find((group) => group.slot === entry.slot);
+      if (existing) existing.entries.push(entry);
+      else {
+        const [start, end] = entry.slot.split('-');
+        groups.push({ type: 'class', slot: entry.slot, entries: [entry], start, end });
+      }
+      return groups;
+    }, [])
+    .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+
+  // Merge classes with detected breaks (e.g. the lunch-time gap between slots)
+  const dayTimeline = todaySlotGroups.reduce<TodayPeriod[]>((timeline, group) => {
+    if (timeline.length > 0) {
+      const previous = timeline[timeline.length - 1];
+      const gapStart = toMinutes(previous.end);
+      const gapEnd = toMinutes(group.start);
+      if (gapEnd > gapStart) {
+        const gapLength = gapEnd - gapStart;
+        timeline.push({
+          type: 'break',
+          start: previous.end,
+          end: group.start,
+          label: gapLength >= 30 && gapStart >= 11 * 60 + 30 && gapEnd <= 14 * 60 + 30 ? 'Lunch Break' : 'Break',
+        });
+      }
+    }
+    timeline.push(group);
+    return timeline;
+  }, []);
+
+  const livePeriod = dayTimeline.find((period) =>
+    currentSlotActive(period.type === 'class' ? period.slot : `${period.start}-${period.end}`)
+  );
+  const upNextPeriod = todaySlotGroups.find((period) => toMinutes(period.start) > nowMinutes);
+  const dayEnded = todaySlotGroups.length > 0 && todaySlotGroups.every((period) => toMinutes(period.end) <= nowMinutes);
+  const dayNotStarted = todaySlotGroups.length > 0 && toMinutes(todaySlotGroups[0].start) > nowMinutes;
+
+  // Bounded preview of upcoming periods (max 2 more class slots, breaks included)
+  const upNextIndex = upNextPeriod ? dayTimeline.findIndex((period) => period === upNextPeriod) : -1;
+  const upcomingPeriods: TodayPeriod[] = [];
+  if (upNextIndex >= 0) {
+    let shownClasses = 0;
+    for (const period of dayTimeline.slice(upNextIndex + 1)) {
+      if (period.type === 'class' && shownClasses >= 2) break;
+      if (period.type === 'class') shownClasses += 1;
+      upcomingPeriods.push(period);
+    }
+  }
+
 
   const getSyllabusTone = (value: number) => {
     if (value >= 85) return 'bg-emerald-500';
@@ -442,26 +562,160 @@ function HodHome({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: str
           </div>
 
           <div className="space-y-2">
-            {todayTimetable.length > 0 ? todayTimetable.map((entry) => {
-              const isActive = currentSlotActive(entry.slot);
-              return (
-                <div
-                  key={`${entry.id}-${entry.day}`}
-                  className={`grid grid-cols-[72px_1fr_1fr_1fr_72px] items-center gap-2 rounded-md border px-2 py-2 text-[11px] ${isActive ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-slate-200 bg-white text-slate-600'}`}
-                >
-                  <span className="font-medium">{entry.slot}</span>
-                  <span className="font-medium text-slate-900">{entry.section ? `${entry.section} ${entry.semester}` : `Sem ${entry.semester}`}</span>
-                  <span>{entry.subject}</span>
-                  <span>{data.staff.find((member) => member.id === entry.facultyId)?.name ?? 'Faculty'}</span>
-                  <span>{entry.room}</span>
-                </div>
-              );
-            }) : (
+            {todayTimetable.length === 0 ? (
               <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">No classes scheduled for today.</div>
+            ) : (
+              <div className="space-y-2">
+                {/* LIVE NOW — the currently active slot, rendered inline (no separate card) */}
+                {livePeriod?.type === 'class' && (
+                  <div className="overflow-hidden rounded-md border border-blue-200 bg-blue-50">
+                    <div className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-1">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-blue-800">
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-60" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-600" />
+                        </span>
+                        LIVE NOW
+                      </span>
+                      <span className="text-[11px] font-bold text-blue-900">{formatSlot(livePeriod.slot)}</span>
+                    </div>
+                    <TimetableClassList entries={livePeriod.entries} staff={data.staff} blue />
+                  </div>
+                )}
+
+                {/* Before the first class of the day */}
+                {!livePeriod && dayNotStarted && (
+                  <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-500">
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    Today&apos;s timetable begins at {formatSlot(todaySlotGroups[0].slot)}
+                  </div>
+                )}
+
+                {/* Break currently in progress (e.g. lunch) — next class becomes up next */}
+                {livePeriod?.type === 'break' && (
+                  <div className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px]">
+                    <span className="font-medium text-amber-800">{formatRange(livePeriod.start, livePeriod.end)}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-semibold text-amber-800">{livePeriod.label ?? 'Break'}</span>
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-amber-700">in progress</span>
+                    </span>
+                  </div>
+                )}
+
+                {/* All of today's classes have finished */}
+                {!livePeriod && dayEnded && (
+                  <div className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700">
+                    <CheckSquare className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                    Today&apos;s timetable completed
+                  </div>
+                )}
+
+                {/* UP NEXT — the slot immediately following the live slot */}
+                {upNextPeriod && (
+                  <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-1">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-700">
+                        <History className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                        UP NEXT
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-700">{formatSlot(upNextPeriod.slot)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-2.5 pb-1">
+                      <span className="text-[11px] text-slate-600">
+                        <strong className="font-semibold text-slate-800">{upNextPeriod.entries.length}</strong>
+                        {' '}
+                        {upNextPeriod.entries.length === 1 ? 'class' : 'classes'} scheduled
+                      </span>
+                      <ViewSlotButton
+                        expanded={expandedSlot === upNextPeriod.slot}
+                        onClick={() => setExpandedSlot(expandedSlot === upNextPeriod.slot ? null : upNextPeriod.slot)}
+                      />
+                    </div>
+                    {expandedSlot === upNextPeriod.slot && (
+                      <div className="border-t border-slate-100">
+                        <TimetableClassList entries={upNextPeriod.entries} staff={data.staff} />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Remaining upcoming periods — limited preview to keep the card compact */}
+                {upcomingPeriods.map((period) =>
+                  period.type === 'class' ? (
+                    <div key={period.slot} className="overflow-hidden rounded-md border border-slate-100 bg-white">
+                      <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                        <span className="text-[11px] font-medium text-slate-600">{formatSlot(period.slot)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-slate-500">{period.entries.length} {period.entries.length === 1 ? 'class' : 'classes'} scheduled</span>
+                          <ViewSlotButton expanded={expandedSlot === period.slot} onClick={() => setExpandedSlot(expandedSlot === period.slot ? null : period.slot)} />
+                        </div>
+                      </div>
+                      {expandedSlot === period.slot && (
+                        <div className="border-t border-slate-100">
+                          <TimetableClassList entries={period.entries} staff={data.staff} />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div key={`${period.start}-${period.end}`} className="flex items-center justify-between rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5">
+                      <span className="text-[11px] font-medium text-slate-500">{formatRange(period.start, period.end)}</span>
+                      <span className="text-[11px] text-slate-600">{period.label ?? 'Break'}</span>
+                    </div>
+                  )
+                )}
+
+                {/* Full timetable — bottom-right action */}
+                <div className="flex justify-end pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowFullTimetable(true)}
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50 hover:text-blue-800"
+                  >
+                    View Full Timetable
+                    <span aria-hidden="true">→</span>
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {showFullTimetable && (
+        <Modal
+          open={showFullTimetable}
+          onClose={() => setShowFullTimetable(false)}
+          title="Full Timetable"
+          subtitle={`${dept?.name ?? 'Department'} · Weekly schedule`}
+          size="lg"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Day</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Time</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Subject</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">Faculty</th>
+                  <th className="hidden px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 sm:table-cell">Room</th>
+                  <th className="hidden px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 sm:table-cell">Section</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {timetable.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-slate-700">{entry.day}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-slate-700">{entry.slot}</td>
+                    <td className="px-3 py-2 text-sm font-medium text-slate-900">{entry.subject}</td>
+                    <td className="px-3 py-2 text-sm text-slate-700">{data.staff.find((member) => member.id === entry.facultyId)?.name ?? 'Faculty'}</td>
+                    <td className="hidden px-3 py-2 whitespace-nowrap text-sm text-slate-700 sm:table-cell">{entry.room}</td>
+                    <td className="hidden px-3 py-2 text-sm text-slate-700 sm:table-cell">{entry.section} · Sem {entry.semester}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
 
       {selectedStudent && (
         <StudentDetailModal
@@ -495,6 +749,8 @@ function DeptInfo({ deptId }: { deptId: string }) {
   const { data } = useStore();
   const dept = data.departments.find((d) => d.id === deptId);
   const hod = data.staff.find((s) => s.id === dept?.hodId);
+  const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
+  const students = data.students.filter((s) => s.departmentId === deptId);
   return (
     <div>
       <PageHeader title="Department Information" description={dept?.name} />
@@ -508,8 +764,8 @@ function DeptInfo({ deptId }: { deptId: string }) {
         </dl>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Faculty" value={dept?.facultyCount ?? 0} icon={<Users className="w-5 h-5" />} accent="blue" />
-        <StatCard label="Students" value={dept?.studentCount ?? 0} icon={<GraduationCap className="w-5 h-5" />} accent="indigo" />
+        <StatCard label="Faculty" value={faculty.length} icon={<Users className="w-5 h-5" />} accent="blue" />
+        <StatCard label="Students" value={students.length} icon={<GraduationCap className="w-5 h-5" />} accent="indigo" />
         <StatCard label="Labs" value={dept?.labCount ?? 0} icon={<Beaker className="w-5 h-5" />} accent="emerald" />
         <StatCard label="Classrooms" value={dept?.classroomCount ?? 0} icon={<Building2 className="w-5 h-5" />} accent="slate" />
       </div>
@@ -707,7 +963,7 @@ function Mentoring({ deptId }: { deptId: string }) {
 
 function FacultyWorkspace({ deptId }: { deptId: string }) {
   const { data } = useStore();
-  const [tab, setTab] = useState<'overview' | 'subject-allocation'>('overview');
+  const [tab, setTab] = useState<'overview' | 'academic-setup'>('overview');
   const [query, setQuery] = useState('');
   const [designation, setDesignation] = useState<string>('all');
   const [selectedFaculty, setSelectedFaculty] = useState<Staff | null>(null);
@@ -715,6 +971,7 @@ function FacultyWorkspace({ deptId }: { deptId: string }) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showAssignTask, setShowAssignTask] = useState(false);
   const [showShortlistPanel, setShowShortlistPanel] = useState(false);
+  const [showHiringRequest, setShowHiringRequest] = useState(false);
 
   const faculty = data.staff.filter((s) => s.departmentId === deptId && TEACHING_ROLES.includes(s.role));
   const designations = Array.from(new Set(faculty.map((f) => f.designation))).sort();
@@ -741,8 +998,8 @@ function FacultyWorkspace({ deptId }: { deptId: string }) {
         title="Faculty"
         description="Monitor faculty academics, workload, performance and mentoring"
         action={tab === 'overview' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 w-64 shadow-sm">
+          <div className="flex max-w-full items-center gap-2 overflow-x-auto whitespace-nowrap">
+            <div className="flex w-40 shrink-0 items-center rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
               <Search className="w-4 h-4 text-slate-400" />
               <input
                 className="bg-transparent border-0 outline-0 text-sm ml-2 flex-1 placeholder:text-slate-400"
@@ -751,16 +1008,22 @@ function FacultyWorkspace({ deptId }: { deptId: string }) {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <select className="input w-auto" value={designation} onChange={(e) => setDesignation(e.target.value)}>
+            <select className="input w-40 shrink-0" value={designation} onChange={(e) => setDesignation(e.target.value)}>
               <option value="all">All Designations</option>
               {designations.map((d) => (
                 <option key={d} value={d}>{d}</option>
               ))}
             </select>
-            <button type="button" className="btn-primary whitespace-nowrap" onClick={() => setShowShortlistPanel(true)}>
-              <UserRoundCheck className="w-4 h-4" />
-              Shortlisted Candidates
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" className="btn-primary" onClick={() => setShowShortlistPanel(true)}>
+                <UserRoundCheck className="w-4 h-4" />
+                Shortlisted Candidates
+              </button>
+              <button type="button" className="btn-primary" onClick={() => setShowHiringRequest(true)}>
+                <Send className="w-4 h-4" />
+                Send Hiring Request
+              </button>
+            </div>
           </div>
         ) : undefined}
       />
@@ -779,16 +1042,16 @@ function FacultyWorkspace({ deptId }: { deptId: string }) {
         <button
           type="button"
           role="tab"
-          aria-selected={tab === 'subject-allocation'}
-          onClick={() => setTab('subject-allocation')}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === 'subject-allocation' ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          aria-selected={tab === 'academic-setup'}
+          onClick={() => setTab('academic-setup')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${tab === 'academic-setup' ? 'border-blue-600 text-blue-700 font-medium' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
-          <ClipboardCheck className="w-4 h-4" />
-          Subject Allocation
+          <Calendar className="w-4 h-4" />
+          Academic Setup
         </button>
       </div>
 
-      {tab === 'subject-allocation' && <SubjectAllocationWorkspace deptId={deptId} />}
+      {tab === 'academic-setup' && <AcademicSetupWorkspace deptId={deptId} />}
       {tab === 'overview' && (
         <>
 
@@ -931,6 +1194,7 @@ function FacultyWorkspace({ deptId }: { deptId: string }) {
           </aside>
         </div>
       )}
+      {showHiringRequest && <HodHiringRequestPanel deptId={deptId} onClose={() => setShowHiringRequest(false)} />}
         </>
       )}
     </div>
@@ -1766,16 +2030,21 @@ const FACULTY_TABS: TabDef[] = [
   { id: 'faculty-perf', label: 'Faculty Performance' },
   { id: 'workload', label: 'Workload' },
   { id: 'mentoring', label: 'Mentoring Management' },
+  { id: 'academic-setup', label: 'Academic Setup' },
 ];
 
 function FacultyManagement({ deptId, onNavigate }: { deptId: string; onNavigate?: (id: string) => void }) {
   const [tab, setTab] = useState('faculty-perf');
+  const [showHiringRequest, setShowHiringRequest] = useState(false);
   return (
     <div>
+      <PageHeader title="Faculty Management" description="Manage department faculty, workload, performance, and academic responsibilities." action={<div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" onClick={() => onNavigate?.('h-faculty')}><Users className="w-4 h-4" /> Shortlisted Candidates</button><button type="button" className="btn-primary" onClick={() => setShowHiringRequest(true)}><Send className="w-4 h-4" /> Send Hiring Request</button></div>} />
       <Tabs tabs={FACULTY_TABS} active={tab} onChange={setTab} />
       {tab === 'faculty-perf' && <FacultyPerf deptId={deptId} onNavigate={onNavigate} />}
       {tab === 'workload' && <Workload deptId={deptId} />}
       {tab === 'mentoring' && <Mentoring deptId={deptId} />}
+      {tab === 'academic-setup' && <AcademicSetupWorkspace deptId={deptId} />}
+      {showHiringRequest && <HodHiringRequestPanel deptId={deptId} onClose={() => setShowHiringRequest(false)} />}
     </div>
   );
 }

@@ -149,7 +149,7 @@ export interface ApprovalRequest {
   date: string;
   amount?: number;
   purpose: string;
-  status: 'pending' | 'approved' | 'rejected' | 'revision' | 'dean-recommended' | 'dean-rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'revision' | 'dean-recommended' | 'dean-rejected' | 'draft' | 'pending-dean-approval' | 'approved-by-dean' | 'rejected-by-dean' | 'sent-to-hr' | 'in-recruitment' | 'completed';
   deanStatus?: 'pending' | 'recommended' | 'rejected';
   deanRemarks?: string;
   principalRemarks?: string;

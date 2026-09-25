@@ -286,7 +286,7 @@ export function facultyOptions(
   const facultyPool = data.staff.filter(
     (f) =>
       TEACHING_ROLES.includes(f.role) &&
-      (f.departmentId === subject.departmentId || f.subjects.includes(subject.name))
+      f.departmentId === subject.departmentId
   );
 
   return facultyPool.map((f) => {
@@ -383,11 +383,26 @@ export function allocationConflicts(
   const subject = data.subjects.find((s) => s.id === alloc.subjectId);
   const faculty = data.staff.find((s) => s.id === alloc.facultyId);
 
+  if (subject && (subject.departmentId !== alloc.departmentId || subject.semester !== alloc.semester)) {
+    result.push({
+      id: `s-${alloc.id}`, type: 'Subject eligibility', severity: 'error',
+      message: `${subject.name} does not belong to the selected department or semester.`,
+      suggestion: 'Select a subject from the same department and semester.',
+    });
+  }
+
   // Faculty availability
   if (alloc.facultyId) {
     if (!faculty) {
       result.push({ id: `f-${alloc.id}`, type: 'Faculty', severity: 'error', message: 'Selected faculty no longer exists.', suggestion: 'Choose another faculty member.' });
     } else {
+      if (faculty.departmentId !== alloc.departmentId) {
+        result.push({
+          id: `fd-${alloc.id}`, type: 'Faculty eligibility', severity: 'error',
+          message: `${faculty.name} belongs to another department and cannot teach this allocation.`,
+          suggestion: 'Select faculty from the subject department.',
+        });
+      }
       if (faculty.status !== 'active') {
         result.push({
           id: `f-${alloc.id}`, type: 'Faculty availability', severity: 'error',

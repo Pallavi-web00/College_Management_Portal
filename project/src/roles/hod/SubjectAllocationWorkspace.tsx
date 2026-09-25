@@ -71,17 +71,28 @@ interface ToastItem {
 
 const deptCodeShort = (data: AppData, deptId: string) => data.departments.find((d) => d.id === deptId)?.code ?? 'DEPT';
 
-export function SubjectAllocationWorkspace({ deptId }: { deptId: string }) {
+export function SubjectAllocationWorkspace({
+  deptId,
+  embedded = false,
+  semesterOverride,
+  sectionOverride,
+}: {
+  deptId: string;
+  embedded?: boolean;
+  semesterOverride?: number;
+  sectionOverride?: string;
+}) {
   const store = useStore();
   const { data, currentUser } = store;
   const { saveSubjectAllocation, updateSubject, removeSubjectAllocation, addAllocationHistory, updateStaff, addNotification } = store;
 
   const [semester, setSemester] = useState(() => {
+    if (semesterOverride !== undefined) return semesterOverride;
     const deptSubs = data.subjects.filter((s) => s.departmentId === deptId);
     const available = SEMESTERS.filter((sem) => deptSubs.some((s) => s.semester === sem));
     return available.includes(6) ? 6 : (available[0] ?? 1);
   });
-  const [sectionFilter, setSectionFilter] = useState('all');
+  const [sectionFilter, setSectionFilter] = useState(sectionOverride ?? 'all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -331,20 +342,21 @@ export function SubjectAllocationWorkspace({ deptId }: { deptId: string }) {
         }
       />
 
-      {/* Semester tabs */}
-      <div className="flex flex-wrap gap-1.5 mb-5">
-        {SEMESTERS.map((sem) => (
-          <button
-            key={sem}
-            onClick={() => { setSemester(sem); setSectionFilter('all'); }}
-            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              semester === sem ? 'bg-slate-900 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {semShort(sem)}
-          </button>
-        ))}
-      </div>
+      {!embedded && (
+        <div className="flex flex-wrap gap-1.5 mb-5">
+          {SEMESTERS.map((sem) => (
+            <button
+              key={sem}
+              onClick={() => { setSemester(sem); setSectionFilter('all'); }}
+              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                semester === sem ? 'bg-slate-900 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {semShort(sem)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card p-4 mb-5">
@@ -359,15 +371,17 @@ export function SubjectAllocationWorkspace({ deptId }: { deptId: string }) {
             />
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <label className="block">
-              <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Section</span>
-              <select className="input mt-0.5" value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)}>
-                <option value="all">All Sections</option>
-                {classOptions.map((c) => (
-                  <option key={c.section} value={c.section}>{c.label}</option>
-                ))}
-              </select>
-            </label>
+            {!embedded && (
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Section</span>
+                <select className="input mt-0.5" value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)}>
+                  <option value="all">All Sections</option>
+                  {classOptions.map((c) => (
+                    <option key={c.section} value={c.section}>{c.label}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="block">
               <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Subject Type</span>
               <select className="input mt-0.5" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>

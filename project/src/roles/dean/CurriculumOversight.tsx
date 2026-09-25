@@ -119,9 +119,6 @@ export function CurriculumOversight() {
 
       {/* Filters */}
       <div className="card p-4 mb-6 flex flex-wrap items-center gap-3">
-        <select className="input w-auto" value={year} onChange={(e) => setYear(e.target.value)} aria-label="Academic Year">
-          {ACADEMIC_YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
         <select className="input w-auto" value={deptFilter} onChange={(e) => { setDeptFilter(e.target.value); setProgramFilter('all'); }} aria-label="Department">
           <option value="all">Department: All</option>
           {data.departments.map((d) => <option key={d.id} value={d.id}>{d.code} - {d.name}</option>)}

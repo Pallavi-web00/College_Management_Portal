@@ -98,7 +98,7 @@ function PrincipalHome() {
               <div key={d.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                 <div>
                   <p className="text-sm font-medium text-slate-900">{d.name}</p>
-                  <p className="text-xs text-slate-500">{d.facultyCount} faculty · {d.studentCount} students</p>
+                  <p className="text-xs text-slate-500">{data.staff.filter((s) => s.departmentId === d.id && s.role !== 'principal' && s.role !== 'dean').length} faculty · {data.students.filter((s) => s.departmentId === d.id).length} students</p>
                 </div>
                 <span className="badge bg-slate-200 text-slate-700">{d.code}</span>
               </div>

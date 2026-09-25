@@ -5,6 +5,7 @@ import { Modal } from '../../components/Modal';
 import { StatCard } from '../../components/StatCard';
 import { StatusBadge } from '../../components/DataTable';
 import type { TimetableEntry } from '../../data/types';
+import { validateTimetableEntry } from './timetableLogic';
 import {
   Plus, Save, Send, AlertTriangle, CheckCircle2, XCircle, Users, Building2,
   Beaker, ChevronLeft, ChevronRight, Pencil, CheckSquare, Eye, RotateCcw,
@@ -15,7 +16,7 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 const DAY_SHORT = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00', '15:00-16:00'];
 const LUNCH_SLOT = '12:00-13:00';
-const SATURDAY_MORNING_SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00'];
+const SATURDAY_MORNING_SLOTS = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00'];
 const CLASS_TYPES = ['Theory', 'Practical', 'Tutorial', 'Seminar', 'Other'];
 const ACADEMIC_YEARS = ['2026–27', '2025–26', '2024–25'];
 const TEACHING_ROLES = ['professor', 'associate-professor', 'assistant-professor', 'lecturer', 'teaching-assistant'];
@@ -61,13 +62,25 @@ function weekDates(weekOffset: number = 0) {
   });
 }
 
-export function TimetableWorkspace({ deptId }: { deptId: string }) {
+export function TimetableWorkspace({
+  deptId,
+  embedded = false,
+  semesterOverride,
+  sectionOverride,
+  academicYearOverride,
+}: {
+  deptId: string;
+  embedded?: boolean;
+  semesterOverride?: number;
+  sectionOverride?: string;
+  academicYearOverride?: string;
+}) {
   const { data, addTimetableEntry, updateTimetableEntry, publishTimetable, addNotification } = useStore();
 
   // Contextual selectors
-  const [semester, setSemester] = useState(6);
-  const [section, setSection] = useState('A');
-  const [academicYear, setAcademicYear] = useState('2026–27');
+  const [semester, setSemester] = useState(semesterOverride ?? 6);
+  const [section, setSection] = useState(sectionOverride ?? 'A');
+  const [academicYear, setAcademicYear] = useState(academicYearOverride ?? '2026–27');
   const [weekOffset, setWeekOffset] = useState(0);
 
   // View state
@@ -265,21 +278,33 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
   }
 
   function checkAvailability(next: FormState): { ok: boolean; warnings: string[] } {
-    const warnings: string[] = [];
-    const others = entries.filter((e) => e.id !== editingEntry?.id);
-    const clash = others.find((e) => e.day === next.day && e.slot === next.slot);
-    if (clash) {
-      if (clash.facultyId === next.facultyId) warnings.push('Faculty is already assigned to another class in this slot.');
-      if (clash.room === next.room) warnings.push('This room/lab is already booked in this slot.');
-      if (clash.section === next.section) warnings.push('This section already has a class in this slot.');
-    }
+    const validation = validateTimetableEntry(data, {
+      departmentId: deptId,
+      semester,
+      section: next.section,
+      day: next.day,
+      slot: next.slot,
+      subject: next.subject,
+      facultyId: next.facultyId,
+      room: next.room,
+    }, data.timetable, editingEntry?.id);
+    const warnings = validation.message ? [validation.message] : [];
     if (next.classType === 'Practical' && !deptLabs.some((l) => l.name === next.room)) {
       warnings.push('A laboratory must be selected for practical classes.');
     }
     if (next.classType !== 'Practical' && deptLabs.some((l) => l.name === next.room)) {
       warnings.push('A normal classroom should be selected for non-practical classes.');
     }
-    return { ok: warnings.length === 0, warnings };
+    return { ok: validation.valid && warnings.length === 0, warnings };
+  }
+
+  function eligibleFacultyFor(subjectName: string, sec: string) {
+    const subject = data.subjects.find((item) => item.departmentId === deptId && item.semester === semester && item.name === subjectName);
+    if (!subject) return [];
+    const facultyIds = new Set(data.subjectAllocations
+      .filter((allocation) => allocation.subjectId === subject.id && allocation.status === 'allocated' && allocation.classIds.includes(sec) && allocation.facultyId)
+      .map((allocation) => allocation.facultyId));
+    return deptFaculty.filter((faculty) => facultyIds.has(faculty.id));
   }
 
   function saveEntry() {
@@ -373,15 +398,15 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
       <PageHeader
         title="Timetable Management"
         description="Manage, review, validate and publish department timetables."
-        action={
+        action={!embedded ? (
           <button className="btn-primary" onClick={() => openAdd()}>
             <Plus className="w-4 h-4" /> Add Class
           </button>
-        }
+        ) : undefined}
       />
 
       {/* Contextual selectors */}
-      <div className="card p-4 mb-6">
+      {!embedded && <div className="card p-4 mb-6">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[160px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">Department</label>
@@ -412,20 +437,20 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
             <RotateCcw className="w-4 h-4" /> Change
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* Summary overview */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <button type="button" onClick={() => { setView('list'); setListFilter({}); }} className="text-left">
+        <button type="button" onClick={() => { if (!embedded) { setView('list'); setListFilter({}); } }} className="text-left">
           <StatCard label="Classes" value={stats.classes} icon={<Calendar className="w-5 h-5" />} accent="blue" compact />
         </button>
-        <button type="button" onClick={() => { setView('list'); setListFilter({ facultyId: '' }); }} className="text-left">
+        <button type="button" onClick={() => { if (!embedded) { setView('list'); setListFilter({ facultyId: '' }); } }} className="text-left">
           <StatCard label="Faculty" value={stats.faculty} icon={<Users className="w-5 h-5" />} accent="indigo" compact />
         </button>
-        <button type="button" onClick={() => { setView('list'); setListFilter({ room: '' }); }} className="text-left">
+        <button type="button" onClick={() => { if (!embedded) { setView('list'); setListFilter({ room: '' }); } }} className="text-left">
           <StatCard label="Rooms" value={stats.rooms} icon={<Building2 className="w-5 h-5" />} accent="emerald" compact />
         </button>
-        <button type="button" onClick={() => { setView('list'); setListFilter({ classType: 'Practical' }); }} className="text-left">
+        <button type="button" onClick={() => { if (!embedded) { setView('list'); setListFilter({ classType: 'Practical' }); } }} className="text-left">
           <StatCard label="Labs" value={stats.labs} icon={<Beaker className="w-5 h-5" />} accent="slate" compact />
         </button>
         <button type="button" onClick={() => document.getElementById('conflicts-section')?.scrollIntoView({ behavior: 'smooth' })} className="text-left">
@@ -443,13 +468,15 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
           >
             <LayoutGrid className="w-4 h-4" /> Weekly Timetable
           </button>
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <List className="w-4 h-4" /> List View
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <List className="w-4 h-4" /> List View
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button className="btn-secondary" onClick={saveDraft}><Save className="w-4 h-4" /> Save Draft</button>
@@ -493,7 +520,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
                         if (d.day === 'Saturday' && !SATURDAY_MORNING_SLOTS.includes(slot)) {
                           return <td key={d.day} className="px-2 py-2 bg-slate-50/40" />;
                         }
-                        if (isLunch) {
+                        if (isLunch && d.day !== 'Saturday') {
                           return (
                             <td key={d.day} className="px-2 py-2 text-center">
                               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
@@ -544,7 +571,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
       )}
 
       {/* List view */}
-      {view === 'list' && (
+      {!embedded && view === 'list' && (
         <div className="card overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-slate-100">
             <div className="flex flex-wrap gap-2">
@@ -642,7 +669,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
       </div>
 
       {/* Laboratory schedule */}
-      <div className="card overflow-hidden mb-6">
+      {!embedded && <div className="card overflow-hidden mb-6">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">Laboratory Schedule</h3>
@@ -679,7 +706,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* Validation status */}
       <div className="card p-5 mb-6">
@@ -822,7 +849,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
             <label className="block text-xs font-medium text-slate-500 mb-1">Faculty</label>
             <select className="input" value={form.facultyId} onChange={(e) => setForm({ ...form, facultyId: e.target.value })}>
               <option value="">Select faculty...</option>
-              {deptFaculty.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              {eligibleFacultyFor(form.subject, form.section).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
           <div>
@@ -834,7 +861,7 @@ export function TimetableWorkspace({ deptId }: { deptId: string }) {
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Time Slot</label>
             <select className="input" value={form.slot} onChange={(e) => setForm({ ...form, slot: e.target.value })}>
-              {SLOTS.filter((s) => s !== LUNCH_SLOT).map((s) => <option key={s} value={s}>{slotLabel(s)}</option>)}
+              {(form.day === 'Saturday' ? SATURDAY_MORNING_SLOTS : SLOTS.filter((s) => s !== LUNCH_SLOT)).map((s) => <option key={s} value={s}>{slotLabel(s)}</option>)}
             </select>
           </div>
           <div>
